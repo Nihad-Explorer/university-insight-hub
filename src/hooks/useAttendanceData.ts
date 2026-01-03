@@ -164,12 +164,12 @@ export function useKPIData(filters: DashboardFilters) {
             const { count } = await batchQuery;
             totalAttendance += count || 0;
 
-            const { count: plCount } = await supabaseClient
+            const { count: presentCount } = await supabaseClient
               .from('uol_attendance')
               .select('attendance_id', { count: 'exact', head: true })
               .in('session_id', batch)
-              .in('status', ['present', 'late']);
-            presentLateCount += plCount || 0;
+              .eq('status', 'present');
+            presentLateCount += presentCount || 0;
           }
         } else {
           // No filters - get all attendance
@@ -178,11 +178,11 @@ export function useKPIData(filters: DashboardFilters) {
             .select('attendance_id', { count: 'exact', head: true });
           totalAttendance = count || 0;
 
-          const { count: plCount } = await supabaseClient
+          const { count: presentCount } = await supabaseClient
             .from('uol_attendance')
             .select('attendance_id', { count: 'exact', head: true })
-            .in('status', ['present', 'late']);
-          presentLateCount = plCount || 0;
+            .eq('status', 'present');
+          presentLateCount = presentCount || 0;
         }
       }
 
@@ -448,12 +448,12 @@ export function useProgramAttendance(filters: DashboardFilters) {
             .in('session_id', batch);
           totalCount += tc || 0;
 
-          const { count: plc } = await supabaseClient
+          const { count: pc } = await supabaseClient
             .from('uol_attendance')
             .select('attendance_id', { count: 'exact', head: true })
             .in('session_id', batch)
-            .in('status', ['present', 'late']);
-          presentLateCount += plc || 0;
+            .eq('status', 'present');
+          presentLateCount += pc || 0;
         }
 
         const rate = totalCount > 0 ? Math.round((presentLateCount / totalCount) * 100) : 0;
@@ -732,9 +732,9 @@ export function useAttendanceSummary(filters: DashboardFilters) {
             }
           }
 
-          const attendanceRate = counts.total > 0 
-            ? Math.round(((counts.present + counts.late) / counts.total) * 100) 
-            : 0;
+           const attendanceRate = counts.total > 0 
+             ? Math.round((counts.present / counts.total) * 100) 
+             : 0;
 
           results.push({
             school_name: school.school_name,
