@@ -1,11 +1,12 @@
 import { createClient } from '@supabase/supabase-js';
 import { School, Program, Course, ClassSession, Student, AttendanceRecord } from '@/types/attendance';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+// External Supabase connection (user's own database)
+const EXTERNAL_SUPABASE_URL = 'https://wcsozwskjfrpuhqhbzml.supabase.co';
+const EXTERNAL_SUPABASE_ANON_KEY = 'sb_publishable_GFYhs8MaoPC4-ngQie_QEQ__Calvkb-';
 
-// Create an untyped client for direct access to existing tables
-export const supabaseClient = createClient(supabaseUrl, supabaseKey);
+// Create client for the external Supabase database
+export const supabaseClient = createClient(EXTERNAL_SUPABASE_URL, EXTERNAL_SUPABASE_ANON_KEY);
 
 // Database types for the existing tables
 export interface DatabaseSchema {
