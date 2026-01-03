@@ -145,7 +145,8 @@ export function useKPIData(filters: DashboardFilters) {
       const sessionIds = await getFilteredSessionIds(filters);
       
       let totalAttendance = 0;
-      let presentLateCount = 0;
+      let presentCount = 0;
+      let absentCount = 0;
       
       if (sessionIds.length > 0 || (!filters.dateRange.from && !filters.dateRange.to && !filters.schoolId && !filters.programId && !filters.courseId && !filters.deliveryMode)) {
         if (sessionIds.length > 0) {
@@ -164,12 +165,19 @@ export function useKPIData(filters: DashboardFilters) {
             const { count } = await batchQuery;
             totalAttendance += count || 0;
 
-            const { count: presentCount } = await supabaseClient
+            const { count: pc } = await supabaseClient
               .from('uol_attendance')
               .select('attendance_id', { count: 'exact', head: true })
               .in('session_id', batch)
               .eq('status', 'present');
-            presentLateCount += presentCount || 0;
+            presentCount += pc || 0;
+
+            const { count: ac } = await supabaseClient
+              .from('uol_attendance')
+              .select('attendance_id', { count: 'exact', head: true })
+              .in('session_id', batch)
+              .eq('status', 'absent');
+            absentCount += ac || 0;
           }
         } else {
           // No filters - get all attendance
@@ -178,16 +186,24 @@ export function useKPIData(filters: DashboardFilters) {
             .select('attendance_id', { count: 'exact', head: true });
           totalAttendance = count || 0;
 
-          const { count: presentCount } = await supabaseClient
+          const { count: pc } = await supabaseClient
             .from('uol_attendance')
             .select('attendance_id', { count: 'exact', head: true })
             .eq('status', 'present');
-          presentLateCount = presentCount || 0;
+          presentCount = pc || 0;
+
+          const { count: ac } = await supabaseClient
+            .from('uol_attendance')
+            .select('attendance_id', { count: 'exact', head: true })
+            .eq('status', 'absent');
+          absentCount = ac || 0;
         }
       }
 
-      const attendanceRate = totalAttendance > 0 
-        ? Math.round((presentLateCount / totalAttendance) * 100) 
+      // Attendance rate = present / (present + absent)
+      const denominator = presentCount + absentCount;
+      const attendanceRate = denominator > 0 
+        ? Math.round((presentCount / denominator) * 100) 
         : 0;
 
       return {
@@ -434,29 +450,32 @@ export function useProgramAttendance(filters: DashboardFilters) {
         if (!sessions || sessions.length === 0) continue;
 
         const sessionIds = sessions.map(s => s.session_id);
-        let totalCount = 0;
-        let presentLateCount = 0;
+        let presentCount = 0;
+        let absentCount = 0;
 
         // Batch queries
         const batchSize = 100;
         for (let i = 0; i < sessionIds.length; i += batchSize) {
           const batch = sessionIds.slice(i, i + batchSize);
           
-          const { count: tc } = await supabaseClient
-            .from('uol_attendance')
-            .select('attendance_id', { count: 'exact', head: true })
-            .in('session_id', batch);
-          totalCount += tc || 0;
-
           const { count: pc } = await supabaseClient
             .from('uol_attendance')
             .select('attendance_id', { count: 'exact', head: true })
             .in('session_id', batch)
             .eq('status', 'present');
-          presentLateCount += pc || 0;
+          presentCount += pc || 0;
+
+          const { count: ac } = await supabaseClient
+            .from('uol_attendance')
+            .select('attendance_id', { count: 'exact', head: true })
+            .in('session_id', batch)
+            .eq('status', 'absent');
+          absentCount += ac || 0;
         }
 
-        const rate = totalCount > 0 ? Math.round((presentLateCount / totalCount) * 100) : 0;
+        // Attendance rate = present / (present + absent)
+        const denominator = presentCount + absentCount;
+        const rate = denominator > 0 ? Math.round((presentCount / denominator) * 100) : 0;
 
         results.push({
           program_name: program.program_name,
@@ -732,9 +751,11 @@ export function useAttendanceSummary(filters: DashboardFilters) {
             }
           }
 
-           const attendanceRate = counts.total > 0 
-             ? Math.round((counts.present / counts.total) * 100) 
-             : 0;
+          // Attendance rate = present / (present + absent)
+          const denominator = counts.present + counts.absent;
+          const attendanceRate = denominator > 0 
+            ? Math.round((counts.present / denominator) * 100) 
+            : 0;
 
           results.push({
             school_name: school.school_name,
