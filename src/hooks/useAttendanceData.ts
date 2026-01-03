@@ -46,88 +46,154 @@ export function useCourses(programId?: string | null) {
   });
 }
 
+// Helper to get filtered session IDs
+async function getFilteredSessionIds(filters: DashboardFilters): Promise<string[]> {
+  // First get all sessions with optional date/delivery filters
+  let sessionsQuery = supabaseClient
+    .from('uol_class_sessions')
+    .select('session_id, course_id, delivery_mode');
+
+  if (filters.dateRange.from) {
+    sessionsQuery = sessionsQuery.gte('session_date', filters.dateRange.from.toISOString().split('T')[0]);
+  }
+  if (filters.dateRange.to) {
+    sessionsQuery = sessionsQuery.lte('session_date', filters.dateRange.to.toISOString().split('T')[0]);
+  }
+  if (filters.deliveryMode) {
+    sessionsQuery = sessionsQuery.eq('delivery_mode', filters.deliveryMode);
+  }
+  if (filters.courseId) {
+    sessionsQuery = sessionsQuery.eq('course_id', filters.courseId);
+  }
+
+  const { data: sessions, error } = await sessionsQuery;
+  if (error) throw error;
+  if (!sessions || sessions.length === 0) return [];
+
+  let filteredSessions = sessions;
+
+  // Filter by program if specified
+  if (filters.programId) {
+    const { data: courses } = await supabaseClient
+      .from('uol_courses')
+      .select('course_id')
+      .eq('program_id', filters.programId);
+    
+    if (courses) {
+      const courseIds = courses.map(c => c.course_id);
+      filteredSessions = filteredSessions.filter(s => courseIds.includes(s.course_id));
+    }
+  }
+
+  // Filter by school if specified
+  if (filters.schoolId && !filters.programId) {
+    const { data: programs } = await supabaseClient
+      .from('uol_programs')
+      .select('program_id')
+      .eq('school_id', filters.schoolId);
+    
+    if (programs) {
+      const programIds = programs.map(p => p.program_id);
+      const { data: courses } = await supabaseClient
+        .from('uol_courses')
+        .select('course_id')
+        .in('program_id', programIds);
+      
+      if (courses) {
+        const courseIds = courses.map(c => c.course_id);
+        filteredSessions = filteredSessions.filter(s => courseIds.includes(s.course_id));
+      }
+    }
+  }
+
+  return filteredSessions.map(s => s.session_id);
+}
+
 export function useKPIData(filters: DashboardFilters) {
   return useQuery({
     queryKey: ['kpi', filters],
     queryFn: async (): Promise<KPIData> => {
-      // Get total students with filters
+      // Get total students
       let studentsQuery = supabaseClient.from('uol_students').select('student_id', { count: 'exact', head: true });
       if (filters.schoolId) studentsQuery = studentsQuery.eq('school_id', filters.schoolId);
       if (filters.programId) studentsQuery = studentsQuery.eq('program_id', filters.programId);
       const { count: totalStudents } = await studentsQuery;
 
-      // Get session IDs that match filters
-      let sessionsQuery = supabaseClient.from('uol_class_sessions').select('session_id, course_id, uol_courses!inner(program_id, uol_programs!inner(school_id))');
-      
+      // Get total sessions
+      let sessionsCountQuery = supabaseClient.from('uol_class_sessions').select('session_id', { count: 'exact', head: true });
       if (filters.dateRange.from) {
-        sessionsQuery = sessionsQuery.gte('session_date', filters.dateRange.from.toISOString().split('T')[0]);
+        sessionsCountQuery = sessionsCountQuery.gte('session_date', filters.dateRange.from.toISOString().split('T')[0]);
       }
       if (filters.dateRange.to) {
-        sessionsQuery = sessionsQuery.lte('session_date', filters.dateRange.to.toISOString().split('T')[0]);
+        sessionsCountQuery = sessionsCountQuery.lte('session_date', filters.dateRange.to.toISOString().split('T')[0]);
       }
       if (filters.deliveryMode) {
-        sessionsQuery = sessionsQuery.eq('delivery_mode', filters.deliveryMode);
+        sessionsCountQuery = sessionsCountQuery.eq('delivery_mode', filters.deliveryMode);
       }
       if (filters.courseId) {
-        sessionsQuery = sessionsQuery.eq('course_id', filters.courseId);
+        sessionsCountQuery = sessionsCountQuery.eq('course_id', filters.courseId);
       }
-      
-      const { data: sessionsData, error: sessionsError } = await sessionsQuery;
-      if (sessionsError) throw sessionsError;
+      const { count: totalSessions } = await sessionsCountQuery;
 
-      let filteredSessionIds = (sessionsData as any[])?.map(s => s.session_id) || [];
-      
-      // Filter by school/program through courses
-      if (filters.schoolId || filters.programId) {
-        const filteredSessions = (sessionsData as any[])?.filter(session => {
-          const course = session.uol_courses as any;
-          const program = course?.uol_programs;
-          if (filters.programId && course?.program_id !== filters.programId) return false;
-          if (filters.schoolId && program?.school_id !== filters.schoolId) return false;
-          return true;
-        }) || [];
-        filteredSessionIds = filteredSessions.map(s => s.session_id);
-      }
-
-      const totalSessions = filteredSessionIds.length;
-
-      // Get attendance records matching filters
-      if (filteredSessionIds.length === 0) {
-        return { totalStudents: totalStudents || 0, totalSessions: 0, totalAttendance: 0, attendanceRate: 0 };
-      }
-
-      let attendanceQuery = supabaseClient
-        .from('uol_attendance')
-        .select('status', { count: 'exact' })
-        .in('session_id', filteredSessionIds);
-
+      // Get total attendance records - simple count first
+      let attendanceQuery = supabaseClient.from('uol_attendance').select('attendance_id', { count: 'exact', head: true });
       if (filters.status) {
         attendanceQuery = attendanceQuery.eq('status', filters.status);
       }
-
-      const { count: totalAttendance } = await attendanceQuery;
-
-      // Calculate attendance rate
+      
+      // If we have session filters, we need to filter attendance by session_ids
+      const sessionIds = await getFilteredSessionIds(filters);
+      
+      let totalAttendance = 0;
       let presentLateCount = 0;
-      if (!filters.status) {
-        const { count: presentCount } = await supabaseClient
-          .from('uol_attendance')
-          .select('*', { count: 'exact', head: true })
-          .in('session_id', filteredSessionIds)
-          .in('status', ['present', 'late']);
-        presentLateCount = presentCount || 0;
-      } else if (filters.status === 'present' || filters.status === 'late') {
-        presentLateCount = totalAttendance || 0;
+      
+      if (sessionIds.length > 0 || (!filters.dateRange.from && !filters.dateRange.to && !filters.schoolId && !filters.programId && !filters.courseId && !filters.deliveryMode)) {
+        if (sessionIds.length > 0) {
+          // Batch the session IDs to avoid query limits
+          const batchSize = 100;
+          for (let i = 0; i < sessionIds.length; i += batchSize) {
+            const batch = sessionIds.slice(i, i + batchSize);
+            
+            let batchQuery = supabaseClient
+              .from('uol_attendance')
+              .select('attendance_id', { count: 'exact', head: true })
+              .in('session_id', batch);
+            if (filters.status) {
+              batchQuery = batchQuery.eq('status', filters.status);
+            }
+            const { count } = await batchQuery;
+            totalAttendance += count || 0;
+
+            const { count: plCount } = await supabaseClient
+              .from('uol_attendance')
+              .select('attendance_id', { count: 'exact', head: true })
+              .in('session_id', batch)
+              .in('status', ['present', 'late']);
+            presentLateCount += plCount || 0;
+          }
+        } else {
+          // No filters - get all attendance
+          const { count } = await supabaseClient
+            .from('uol_attendance')
+            .select('attendance_id', { count: 'exact', head: true });
+          totalAttendance = count || 0;
+
+          const { count: plCount } = await supabaseClient
+            .from('uol_attendance')
+            .select('attendance_id', { count: 'exact', head: true })
+            .in('status', ['present', 'late']);
+          presentLateCount = plCount || 0;
+        }
       }
 
-      const attendanceRate = totalAttendance && totalAttendance > 0 
+      const attendanceRate = totalAttendance > 0 
         ? Math.round((presentLateCount / totalAttendance) * 100) 
         : 0;
 
       return {
         totalStudents: totalStudents || 0,
-        totalSessions,
-        totalAttendance: totalAttendance || 0,
+        totalSessions: totalSessions || 0,
+        totalAttendance,
         attendanceRate,
       };
     },
@@ -142,54 +208,68 @@ export function useAttendanceBySchool(filters: DashboardFilters) {
       const { data: schools } = await supabaseClient.from('uol_schools').select('*');
       if (!schools) return [];
 
-      // Build session filter
-      let sessionsQuery = supabaseClient.from('uol_class_sessions').select('session_id, course_id, uol_courses!inner(program_id, uol_programs!inner(school_id))');
-      
-      if (filters.dateRange.from) {
-        sessionsQuery = sessionsQuery.gte('session_date', filters.dateRange.from.toISOString().split('T')[0]);
-      }
-      if (filters.dateRange.to) {
-        sessionsQuery = sessionsQuery.lte('session_date', filters.dateRange.to.toISOString().split('T')[0]);
-      }
-      if (filters.deliveryMode) {
-        sessionsQuery = sessionsQuery.eq('delivery_mode', filters.deliveryMode);
-      }
-      if (filters.courseId) {
-        sessionsQuery = sessionsQuery.eq('course_id', filters.courseId);
-      }
-
-      const { data: sessionsData } = await sessionsQuery;
-      if (!sessionsData || sessionsData.length === 0) return [];
-
-      const schoolSessionMap: Record<string, string[]> = {};
-      (sessionsData as any[]).forEach(session => {
-        const course = session.uol_courses as any;
-        const schoolId = course?.uol_programs?.school_id;
-        if (schoolId) {
-          if (!schoolSessionMap[schoolId]) schoolSessionMap[schoolId] = [];
-          schoolSessionMap[schoolId].push(session.session_id);
-        }
-      });
-
       const results: AttendanceBySchool[] = [];
       
-      for (const school of (schools as any[])) {
+      for (const school of schools) {
         if (filters.schoolId && school.school_id !== filters.schoolId) continue;
+
+        // Get programs for this school
+        const { data: programs } = await supabaseClient
+          .from('uol_programs')
+          .select('program_id')
+          .eq('school_id', school.school_id);
         
-        const sessionIds = schoolSessionMap[school.school_id] || [];
-        if (sessionIds.length === 0) continue;
+        if (!programs || programs.length === 0) continue;
 
-        const statuses = ['present', 'late', 'excused', 'absent'] as const;
-        const counts: Record<string, number> = { present: 0, late: 0, excused: 0, absent: 0 };
+        // Get courses for these programs
+        const programIds = programs.map(p => p.program_id);
+        const { data: courses } = await supabaseClient
+          .from('uol_courses')
+          .select('course_id')
+          .in('program_id', programIds);
+        
+        if (!courses || courses.length === 0) continue;
 
-        for (const status of statuses) {
-          if (filters.status && filters.status !== status) continue;
-          const { count } = await supabaseClient
-            .from('uol_attendance')
-            .select('*', { count: 'exact', head: true })
-            .in('session_id', sessionIds)
-            .eq('status', status);
-          counts[status] = count || 0;
+        // Get sessions for these courses
+        const courseIds = courses.map(c => c.course_id);
+        let sessionsQuery = supabaseClient
+          .from('uol_class_sessions')
+          .select('session_id')
+          .in('course_id', courseIds);
+        
+        if (filters.dateRange.from) {
+          sessionsQuery = sessionsQuery.gte('session_date', filters.dateRange.from.toISOString().split('T')[0]);
+        }
+        if (filters.dateRange.to) {
+          sessionsQuery = sessionsQuery.lte('session_date', filters.dateRange.to.toISOString().split('T')[0]);
+        }
+        if (filters.deliveryMode) {
+          sessionsQuery = sessionsQuery.eq('delivery_mode', filters.deliveryMode);
+        }
+        if (filters.courseId) {
+          sessionsQuery = sessionsQuery.eq('course_id', filters.courseId);
+        }
+
+        const { data: sessions } = await sessionsQuery;
+        if (!sessions || sessions.length === 0) continue;
+
+        const sessionIds = sessions.map(s => s.session_id);
+        const counts = { present: 0, late: 0, excused: 0, absent: 0 };
+
+        // Batch queries for performance
+        const batchSize = 100;
+        for (let i = 0; i < sessionIds.length; i += batchSize) {
+          const batch = sessionIds.slice(i, i + batchSize);
+          
+          for (const status of ['present', 'late', 'excused', 'absent'] as const) {
+            if (filters.status && filters.status !== status) continue;
+            const { count } = await supabaseClient
+              .from('uol_attendance')
+              .select('attendance_id', { count: 'exact', head: true })
+              .in('session_id', batch)
+              .eq('status', status);
+            counts[status] += count || 0;
+          }
         }
 
         results.push({
@@ -211,7 +291,7 @@ export function useAttendanceTrends(filters: DashboardFilters) {
     queryKey: ['attendanceTrends', filters],
     queryFn: async (): Promise<AttendanceTrend[]> => {
       // Get sessions with dates
-      let sessionsQuery = supabaseClient.from('uol_class_sessions').select('session_id, session_date, course_id, uol_courses!inner(program_id, uol_programs!inner(school_id))');
+      let sessionsQuery = supabaseClient.from('uol_class_sessions').select('session_id, session_date, course_id');
       
       if (filters.dateRange.from) {
         sessionsQuery = sessionsQuery.gte('session_date', filters.dateRange.from.toISOString().split('T')[0]);
@@ -226,19 +306,39 @@ export function useAttendanceTrends(filters: DashboardFilters) {
         sessionsQuery = sessionsQuery.eq('course_id', filters.courseId);
       }
 
-      const { data: sessionsData } = await sessionsQuery;
-      if (!sessionsData) return [];
+      const { data: sessions } = await sessionsQuery;
+      if (!sessions || sessions.length === 0) return [];
 
-      // Filter by school/program
-      let filteredSessions = sessionsData as any[];
-      if (filters.schoolId || filters.programId) {
-        filteredSessions = (sessionsData as any[]).filter(session => {
-          const course = session.uol_courses as any;
-          const program = course?.uol_programs;
-          if (filters.programId && course?.program_id !== filters.programId) return false;
-          if (filters.schoolId && program?.school_id !== filters.schoolId) return false;
-          return true;
-        });
+      let filteredSessions = sessions;
+
+      // Filter by program
+      if (filters.programId) {
+        const { data: courses } = await supabaseClient
+          .from('uol_courses')
+          .select('course_id')
+          .eq('program_id', filters.programId);
+        if (courses) {
+          const courseIds = courses.map(c => c.course_id);
+          filteredSessions = filteredSessions.filter(s => courseIds.includes(s.course_id));
+        }
+      }
+
+      // Filter by school
+      if (filters.schoolId && !filters.programId) {
+        const { data: programs } = await supabaseClient
+          .from('uol_programs')
+          .select('program_id')
+          .eq('school_id', filters.schoolId);
+        if (programs) {
+          const { data: courses } = await supabaseClient
+            .from('uol_courses')
+            .select('course_id')
+            .in('program_id', programs.map(p => p.program_id));
+          if (courses) {
+            const courseIds = courses.map(c => c.course_id);
+            filteredSessions = filteredSessions.filter(s => courseIds.includes(s.course_id));
+          }
+        }
       }
 
       if (filteredSessions.length === 0) return [];
@@ -254,19 +354,31 @@ export function useAttendanceTrends(filters: DashboardFilters) {
       const results: AttendanceTrend[] = [];
       const sortedDates = Object.keys(dateSessionMap).sort();
 
-      for (const date of sortedDates) {
+      // Limit to last 30 dates for performance
+      const recentDates = sortedDates.slice(-30);
+
+      for (const date of recentDates) {
         const sessionIds = dateSessionMap[date];
-        let query = supabaseClient
-          .from('uol_attendance')
-          .select('*', { count: 'exact', head: true })
-          .in('session_id', sessionIds);
+        let count = 0;
+        
+        // Batch queries
+        const batchSize = 100;
+        for (let i = 0; i < sessionIds.length; i += batchSize) {
+          const batch = sessionIds.slice(i, i + batchSize);
+          let query = supabaseClient
+            .from('uol_attendance')
+            .select('attendance_id', { count: 'exact', head: true })
+            .in('session_id', batch);
 
-        if (filters.status) {
-          query = query.eq('status', filters.status);
+          if (filters.status) {
+            query = query.eq('status', filters.status);
+          }
+
+          const { count: batchCount } = await query;
+          count += batchCount || 0;
         }
-
-        const { count } = await query;
-        results.push({ date, count: count || 0 });
+        
+        results.push({ date, count });
       }
 
       return results;
@@ -278,14 +390,16 @@ export function useProgramAttendance(filters: DashboardFilters) {
   return useQuery({
     queryKey: ['programAttendance', filters],
     queryFn: async (): Promise<ProgramAttendance[]> => {
-      const { data: programs } = await supabaseClient.from('uol_programs').select('*, uol_schools!inner(school_id)');
+      const { data: programs } = await supabaseClient.from('uol_programs').select('*');
       if (!programs) return [];
 
       const results: ProgramAttendance[] = [];
 
-      for (const program of (programs as any[])) {
+      for (const program of programs) {
         if (filters.programId && program.program_id !== filters.programId) continue;
-        if (filters.schoolId && program.uol_schools?.school_id !== filters.schoolId) continue;
+        
+        // Filter by school
+        if (filters.schoolId && program.school_id !== filters.schoolId) continue;
 
         // Get courses for this program
         const { data: courses } = await supabaseClient
@@ -295,7 +409,7 @@ export function useProgramAttendance(filters: DashboardFilters) {
 
         if (!courses || courses.length === 0) continue;
 
-        const courseIds = (courses as any[]).map(c => c.course_id);
+        const courseIds = courses.map(c => c.course_id);
 
         // Get sessions for these courses
         let sessionsQuery = supabaseClient
@@ -319,21 +433,30 @@ export function useProgramAttendance(filters: DashboardFilters) {
         const { data: sessions } = await sessionsQuery;
         if (!sessions || sessions.length === 0) continue;
 
-        const sessionIds = (sessions as any[]).map(s => s.session_id);
+        const sessionIds = sessions.map(s => s.session_id);
+        let totalCount = 0;
+        let presentLateCount = 0;
 
-        // Get attendance for these sessions
-        const { count: totalCount } = await supabaseClient
-          .from('uol_attendance')
-          .select('*', { count: 'exact', head: true })
-          .in('session_id', sessionIds);
+        // Batch queries
+        const batchSize = 100;
+        for (let i = 0; i < sessionIds.length; i += batchSize) {
+          const batch = sessionIds.slice(i, i + batchSize);
+          
+          const { count: tc } = await supabaseClient
+            .from('uol_attendance')
+            .select('attendance_id', { count: 'exact', head: true })
+            .in('session_id', batch);
+          totalCount += tc || 0;
 
-        const { count: presentLateCount } = await supabaseClient
-          .from('uol_attendance')
-          .select('*', { count: 'exact', head: true })
-          .in('session_id', sessionIds)
-          .in('status', ['present', 'late']);
+          const { count: plc } = await supabaseClient
+            .from('uol_attendance')
+            .select('attendance_id', { count: 'exact', head: true })
+            .in('session_id', batch)
+            .in('status', ['present', 'late']);
+          presentLateCount += plc || 0;
+        }
 
-        const rate = totalCount && totalCount > 0 ? Math.round((presentLateCount || 0) / totalCount * 100) : 0;
+        const rate = totalCount > 0 ? Math.round((presentLateCount / totalCount) * 100) : 0;
 
         results.push({
           program_name: program.program_name,
@@ -358,7 +481,7 @@ export function useDeliveryModeAttendance(filters: DashboardFilters) {
 
         let sessionsQuery = supabaseClient
           .from('uol_class_sessions')
-          .select('session_id, course_id, uol_courses!inner(program_id, uol_programs!inner(school_id))')
+          .select('session_id, course_id')
           .eq('delivery_mode', mode);
 
         if (filters.dateRange.from) {
@@ -371,34 +494,60 @@ export function useDeliveryModeAttendance(filters: DashboardFilters) {
           sessionsQuery = sessionsQuery.eq('course_id', filters.courseId);
         }
 
-        const { data: sessionsData } = await sessionsQuery;
-        if (!sessionsData || sessionsData.length === 0) continue;
+        const { data: sessions } = await sessionsQuery;
+        if (!sessions || sessions.length === 0) continue;
 
-        // Filter by school/program
-        let filteredSessions = sessionsData as any[];
-        if (filters.schoolId || filters.programId) {
-          filteredSessions = (sessionsData as any[]).filter(session => {
-            const course = session.uol_courses as any;
-            const program = course?.uol_programs;
-            if (filters.programId && course?.program_id !== filters.programId) return false;
-            if (filters.schoolId && program?.school_id !== filters.schoolId) return false;
-            return true;
-          });
+        let filteredSessions = sessions;
+
+        // Filter by program
+        if (filters.programId) {
+          const { data: courses } = await supabaseClient
+            .from('uol_courses')
+            .select('course_id')
+            .eq('program_id', filters.programId);
+          if (courses) {
+            const courseIds = courses.map(c => c.course_id);
+            filteredSessions = filteredSessions.filter(s => courseIds.includes(s.course_id));
+          }
+        }
+
+        // Filter by school
+        if (filters.schoolId && !filters.programId) {
+          const { data: programs } = await supabaseClient
+            .from('uol_programs')
+            .select('program_id')
+            .eq('school_id', filters.schoolId);
+          if (programs) {
+            const { data: courses } = await supabaseClient
+              .from('uol_courses')
+              .select('course_id')
+              .in('program_id', programs.map(p => p.program_id));
+            if (courses) {
+              const courseIds = courses.map(c => c.course_id);
+              filteredSessions = filteredSessions.filter(s => courseIds.includes(s.course_id));
+            }
+          }
         }
 
         if (filteredSessions.length === 0) continue;
 
         const sessionIds = filteredSessions.map(s => s.session_id);
-        const counts: Record<string, number> = { present: 0, late: 0, excused: 0, absent: 0 };
+        const counts = { present: 0, late: 0, excused: 0, absent: 0 };
 
-        for (const status of ['present', 'late', 'excused', 'absent'] as const) {
-          if (filters.status && filters.status !== status) continue;
-          const { count } = await supabaseClient
-            .from('uol_attendance')
-            .select('*', { count: 'exact', head: true })
-            .in('session_id', sessionIds)
-            .eq('status', status);
-          counts[status] = count || 0;
+        // Batch queries
+        const batchSize = 100;
+        for (let i = 0; i < sessionIds.length; i += batchSize) {
+          const batch = sessionIds.slice(i, i + batchSize);
+          
+          for (const status of ['present', 'late', 'excused', 'absent'] as const) {
+            if (filters.status && filters.status !== status) continue;
+            const { count } = await supabaseClient
+              .from('uol_attendance')
+              .select('attendance_id', { count: 'exact', head: true })
+              .in('session_id', batch)
+              .eq('status', status);
+            counts[status] += count || 0;
+          }
         }
 
         results.push({
@@ -420,7 +569,7 @@ export function useFilteredAttendanceRecords(filters: DashboardFilters) {
     queryKey: ['filteredAttendance', filters],
     queryFn: async () => {
       // Get sessions matching filters
-      let sessionsQuery = supabaseClient.from('uol_class_sessions').select('session_id, session_date, start_time, delivery_mode, instructor, course_id, uol_courses!inner(course_code, course_title, program_id, uol_programs!inner(program_name, school_id, uol_schools!inner(school_name)))');
+      let sessionsQuery = supabaseClient.from('uol_class_sessions').select('session_id, session_date, start_time, delivery_mode, instructor, course_id');
 
       if (filters.dateRange.from) {
         sessionsQuery = sessionsQuery.gte('session_date', filters.dateRange.from.toISOString().split('T')[0]);
@@ -435,20 +584,39 @@ export function useFilteredAttendanceRecords(filters: DashboardFilters) {
         sessionsQuery = sessionsQuery.eq('course_id', filters.courseId);
       }
 
-      const { data: sessionsData } = await sessionsQuery;
-      if (!sessionsData || sessionsData.length === 0) return [];
+      const { data: sessions } = await sessionsQuery;
+      if (!sessions || sessions.length === 0) return [];
 
-      // Filter by school/program
-      let filteredSessions = sessionsData as any[];
-      if (filters.schoolId || filters.programId) {
-        filteredSessions = (sessionsData as any[]).filter(session => {
-          const course = session.uol_courses as any;
-          const program = course?.uol_programs;
-          const school = program?.uol_schools;
-          if (filters.programId && course?.program_id !== filters.programId) return false;
-          if (filters.schoolId && school?.school_id !== filters.schoolId) return false;
-          return true;
-        });
+      let filteredSessions = sessions;
+
+      // Filter by program
+      if (filters.programId) {
+        const { data: courses } = await supabaseClient
+          .from('uol_courses')
+          .select('course_id')
+          .eq('program_id', filters.programId);
+        if (courses) {
+          const courseIds = courses.map(c => c.course_id);
+          filteredSessions = filteredSessions.filter(s => courseIds.includes(s.course_id));
+        }
+      }
+
+      // Filter by school
+      if (filters.schoolId && !filters.programId) {
+        const { data: programs } = await supabaseClient
+          .from('uol_programs')
+          .select('program_id')
+          .eq('school_id', filters.schoolId);
+        if (programs) {
+          const { data: courses } = await supabaseClient
+            .from('uol_courses')
+            .select('course_id')
+            .in('program_id', programs.map(p => p.program_id));
+          if (courses) {
+            const courseIds = courses.map(c => c.course_id);
+            filteredSessions = filteredSessions.filter(s => courseIds.includes(s.course_id));
+          }
+        }
       }
 
       if (filteredSessions.length === 0) return [];
@@ -459,32 +627,129 @@ export function useFilteredAttendanceRecords(filters: DashboardFilters) {
       let attendanceQuery = supabaseClient
         .from('uol_attendance')
         .select('*')
-        .in('session_id', sessionIds)
+        .in('session_id', sessionIds.slice(0, 100)) // Limit for performance
         .limit(1000);
 
       if (filters.status) {
         attendanceQuery = attendanceQuery.eq('status', filters.status);
       }
 
-      const { data: attendanceData } = await attendanceQuery;
+      const { data: attendance } = await attendanceQuery;
+      if (!attendance) return [];
 
-      // Join with session data
+      // Get course and school info for display
+      const { data: courses } = await supabaseClient.from('uol_courses').select('*');
+      const { data: programs } = await supabaseClient.from('uol_programs').select('*');
+      const { data: schools } = await supabaseClient.from('uol_schools').select('*');
+
+      const courseMap = new Map(courses?.map(c => [c.course_id, c]) || []);
+      const programMap = new Map(programs?.map(p => [p.program_id, p]) || []);
+      const schoolMap = new Map(schools?.map(s => [s.school_id, s]) || []);
       const sessionMap = new Map(filteredSessions.map(s => [s.session_id, s]));
-      
-      return (attendanceData as any[] || []).map(record => {
-        const session = sessionMap.get(record.session_id) as any;
+
+      return attendance.map((record: any) => {
+        const session = sessionMap.get(record.session_id);
+        const course = session ? courseMap.get(session.course_id) : null;
+        const program = course ? programMap.get(course.program_id) : null;
+        const school = program ? schoolMap.get(program.school_id) : null;
+
         return {
           ...record,
           session_date: session?.session_date,
-          start_time: session?.start_time,
           delivery_mode: session?.delivery_mode,
-          instructor: session?.instructor,
-          course_code: session?.uol_courses?.course_code,
-          course_title: session?.uol_courses?.course_title,
-          program_name: session?.uol_courses?.uol_programs?.program_name,
-          school_name: session?.uol_courses?.uol_programs?.uol_schools?.school_name,
+          course_title: course?.course_title,
+          program_name: program?.program_name,
+          school_name: school?.school_name,
         };
       });
+    },
+  });
+}
+
+export function useAttendanceSummary(filters: DashboardFilters) {
+  return useQuery({
+    queryKey: ['attendanceSummary', filters],
+    queryFn: async () => {
+      const { data: schools } = await supabaseClient.from('uol_schools').select('*');
+      const { data: programs } = await supabaseClient.from('uol_programs').select('*');
+      
+      if (!schools || !programs) return [];
+
+      const results: any[] = [];
+
+      for (const school of schools) {
+        if (filters.schoolId && school.school_id !== filters.schoolId) continue;
+
+        for (const program of programs) {
+          if (program.school_id !== school.school_id) continue;
+          if (filters.programId && program.program_id !== filters.programId) continue;
+
+          // Get courses
+          const { data: courses } = await supabaseClient
+            .from('uol_courses')
+            .select('course_id')
+            .eq('program_id', program.program_id);
+          
+          if (!courses || courses.length === 0) continue;
+
+          const courseIds = courses.map(c => c.course_id);
+
+          // Get sessions
+          let sessionsQuery = supabaseClient
+            .from('uol_class_sessions')
+            .select('session_id')
+            .in('course_id', courseIds);
+
+          if (filters.dateRange.from) {
+            sessionsQuery = sessionsQuery.gte('session_date', filters.dateRange.from.toISOString().split('T')[0]);
+          }
+          if (filters.dateRange.to) {
+            sessionsQuery = sessionsQuery.lte('session_date', filters.dateRange.to.toISOString().split('T')[0]);
+          }
+          if (filters.deliveryMode) {
+            sessionsQuery = sessionsQuery.eq('delivery_mode', filters.deliveryMode);
+          }
+
+          const { data: sessions } = await sessionsQuery;
+          if (!sessions || sessions.length === 0) continue;
+
+          const sessionIds = sessions.map(s => s.session_id);
+          const counts = { present: 0, late: 0, excused: 0, absent: 0, total: 0 };
+
+          // Batch queries
+          const batchSize = 100;
+          for (let i = 0; i < sessionIds.length; i += batchSize) {
+            const batch = sessionIds.slice(i, i + batchSize);
+            
+            for (const status of ['present', 'late', 'excused', 'absent'] as const) {
+              const { count } = await supabaseClient
+                .from('uol_attendance')
+                .select('attendance_id', { count: 'exact', head: true })
+                .in('session_id', batch)
+                .eq('status', status);
+              counts[status] += count || 0;
+              counts.total += count || 0;
+            }
+          }
+
+          const attendanceRate = counts.total > 0 
+            ? Math.round(((counts.present + counts.late) / counts.total) * 100) 
+            : 0;
+
+          results.push({
+            school_name: school.school_name,
+            program_name: program.program_name,
+            total_records: counts.total,
+            present: counts.present,
+            late: counts.late,
+            excused: counts.excused,
+            absent: counts.absent,
+            attendance_rate: attendanceRate,
+          });
+        }
+      }
+
+      return results;
     },
   });
 }
