@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { School, Program, Course, ClassSession, Student, AttendanceRecord } from '@/types/attendance';
 
 // External Supabase connection (user's own database)
-const EXTERNAL_SUPABASE_URL = 'https://wcsozwskjfrpuhqhbzml.supabase.co';
+const EXTERNAL_SUPABASE_URL = 'https://wcsowzskjfrpuhqhbzml.supabase.co';
 const EXTERNAL_SUPABASE_ANON_KEY = 'sb_publishable_GFYhs8MaoPC4-ngQie_QEQ__Calvkb-';
 
 // Create client for the external Supabase database
