@@ -1,6 +1,112 @@
-# Welcome to your Lovable project
+# AI University of Leeds — Attendance & Engagement Intelligence Dashboard
 
-## Project info
+A premium, executive-grade analytics dashboard for monitoring and analyzing student attendance across programs, courses, and delivery modes at a university level.
+
+## Problem Statement
+
+Universities face significant challenges in tracking and understanding student attendance patterns at scale. Manual analysis is time-consuming, insights are often delayed, and decision-makers lack real-time visibility into engagement trends. This dashboard addresses these challenges by providing:
+
+- **Real-time visibility** into attendance metrics across all academic units
+- **AI-powered insights** that surface actionable recommendations automatically
+- **Executive-grade reporting** suitable for senior leadership and governance committees
+- **Data-driven intervention** capabilities to identify at-risk programs and students
+
+## Data Model (Supabase)
+
+The dashboard connects to a Supabase PostgreSQL database with the following schema:
+
+### Tables
+
+| Table | Description |
+|-------|-------------|
+| `uol_schools` | Academic schools/faculties (e.g., School of Law, School of Engineering) |
+| `uol_programs` | Degree programs within schools |
+| `uol_courses` | Individual courses within programs |
+| `uol_students` | Student records with demographic information |
+| `uol_class_sessions` | Scheduled class sessions with delivery mode and instructor |
+| `uol_attendance` | Attendance records linking students to sessions with status |
+
+### Relationships
+
+```
+Schools → Programs → Courses → Class Sessions → Attendance Records
+                 ↘ Students ↗
+```
+
+### Attendance Statuses
+
+- **Present**: Student attended on time
+- **Late**: Student arrived after session start
+- **Excused**: Approved absence
+- **Absent**: Unexcused absence
+
+## Dashboard KPIs
+
+| KPI | Calculation | Purpose |
+|-----|-------------|---------|
+| **Total Students** | Count of unique enrolled students | Measure cohort size |
+| **Class Sessions** | Count of delivered sessions | Track teaching activity |
+| **Attendance Records** | Total recorded entries | Data completeness indicator |
+| **Attendance Rate** | Present / (Present + Absent) | Core engagement metric |
+
+## Charts & Visualizations
+
+1. **Attendance by School** — Stacked bar chart comparing status distribution across academic units
+2. **Attendance Trends** — Line chart showing daily patterns for intervention timing
+3. **Attendance by Program** — Horizontal bar chart ranking programs by attendance rate
+4. **Delivery Mode Analysis** — Grouped comparison of online vs in-person effectiveness
+
+## AI Insights Capability
+
+The dashboard includes an AI-powered insights panel that:
+
+- Accepts natural language questions about attendance data
+- Returns concise, executive-style responses (max 3 bullets, 1 sentence each)
+- Automatically generates supporting visualizations for comparison queries
+- Uses real institutional data with applied filters
+
+### Example Queries
+
+- "Which school has the highest absenteeism?"
+- "Compare online vs in-person attendance"
+- "Which programs need intervention?"
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| **Frontend** | React 18, TypeScript, Vite |
+| **Styling** | Tailwind CSS, shadcn/ui components |
+| **Charts** | Recharts |
+| **State** | TanStack React Query |
+| **Backend** | Supabase (PostgreSQL + Edge Functions) |
+| **AI** | Lovable AI Gateway (LLM reasoning) |
+| **Hosting** | Lovable Cloud |
+
+## Intended Use Cases
+
+### Primary Users
+
+- **Vice-Chancellor / Provost** — Institutional overview and strategic planning
+- **Deans / School Directors** — School-level performance monitoring
+- **Strategy & Planning Committee** — Data-driven policy development
+- **Student Services** — Early intervention identification
+
+### Key Scenarios
+
+1. **Weekly leadership briefings** — Quick overview of engagement health
+2. **Program reviews** — Evidence-based curriculum decisions
+3. **Delivery mode evaluation** — Post-pandemic teaching strategy
+4. **At-risk identification** — Proactive student support targeting
+
+## Getting Started
+
+1. Clone the repository
+2. Install dependencies: `npm install`
+3. Configure environment variables for Supabase connection
+4. Run development server: `npm run dev`
+
+## Project Info
 
 **URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
 
@@ -36,38 +142,14 @@ npm i
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
 
-## Can I connect a custom domain to my Lovable project?
+## License
 
-Yes, you can!
+Proprietary — AI University of Leeds
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+---
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+*Built with [Lovable](https://lovable.dev) — AI-powered full-stack development*

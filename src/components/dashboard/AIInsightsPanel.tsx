@@ -2,32 +2,35 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Brain, Sparkles, Send, Loader2 } from 'lucide-react';
-import { DashboardFilters } from '@/types/attendance';
+import { Brain, Sparkles, Send, Loader2, Zap } from 'lucide-react';
+import { DashboardFilters, AttendanceBySchool, ProgramAttendance } from '@/types/attendance';
 import { cn } from '@/lib/utils';
+import { InsightMiniChart } from './InsightMiniChart';
 
 interface AIInsightsPanelProps {
   filters: DashboardFilters;
+  schoolData?: AttendanceBySchool[];
+  programData?: ProgramAttendance[];
 }
 
 const exampleQuestions = [
-  "Which school has the highest absentee rate this month?",
-  "Are online sessions better attended than in-person ones?",
-  "Which programs show declining attendance trends?",
-  "What time of day has the most late arrivals?",
-  "Which courses have the most consistent attendance?"
+  "Which school has highest absenteeism?",
+  "Compare online vs in-person attendance",
+  "Which programs need intervention?",
 ];
 
-export function AIInsightsPanel({ filters }: AIInsightsPanelProps) {
+export function AIInsightsPanel({ filters, schoolData, programData }: AIInsightsPanelProps) {
   const [question, setQuestion] = useState('');
   const [response, setResponse] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [lastQuestion, setLastQuestion] = useState('');
 
   const handleAskQuestion = async (q: string) => {
     if (!q.trim()) return;
     
     setIsLoading(true);
     setResponse('');
+    setLastQuestion(q.toLowerCase());
     
     try {
       const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-insights`, {
@@ -92,7 +95,7 @@ export function AIInsightsPanel({ filters }: AIInsightsPanelProps) {
       }
     } catch (error) {
       console.error('AI request failed:', error);
-      setResponse('Sorry, I encountered an error analyzing the data. Please try again.');
+      setResponse('Unable to analyze data. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -103,47 +106,61 @@ export function AIInsightsPanel({ filters }: AIInsightsPanelProps) {
     setQuestion('');
   };
 
+  // Determine which chart to show based on question keywords
+  const shouldShowSchoolChart = lastQuestion.includes('school') || 
+    lastQuestion.includes('absentee') || 
+    lastQuestion.includes('highest') ||
+    lastQuestion.includes('lowest');
+    
+  const shouldShowProgramChart = lastQuestion.includes('program') || 
+    lastQuestion.includes('intervention') ||
+    lastQuestion.includes('worst') ||
+    lastQuestion.includes('best');
+
   return (
-    <Card className="border-border bg-card animate-slide-up">
-      <CardHeader>
-        <div className="flex items-center gap-2">
-          <div className="rounded-lg bg-accent/20 p-2">
-            <Brain className="h-5 w-5 text-accent" />
+    <Card className="border-border/50 bg-gradient-to-br from-card to-accent/5 shadow-card animate-slide-up">
+      <CardHeader className="pb-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-gradient-to-br from-accent to-accent/80 p-2.5 shadow-sm">
+              <Brain className="h-5 w-5 text-accent-foreground" />
+            </div>
+            <div>
+              <CardTitle className="text-lg font-bold tracking-tight">AI Intelligence</CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">Executive insights powered by institutional data</p>
+            </div>
           </div>
-          <div>
-            <CardTitle className="text-lg font-semibold">AI Insights</CardTitle>
-            <p className="text-sm text-muted-foreground">Ask questions about your attendance data</p>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-accent/10 text-accent text-xs font-medium">
+            <Zap className="h-3 w-3" />
+            Real-time
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Example Questions */}
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-muted-foreground">Try asking:</p>
-          <div className="flex flex-wrap gap-2">
-            {exampleQuestions.map((eq, idx) => (
-              <Button
-                key={idx}
-                variant="outline"
-                size="sm"
-                className="text-xs h-auto py-1.5 px-3"
-                onClick={() => handleAskQuestion(eq)}
-                disabled={isLoading}
-              >
-                <Sparkles className="h-3 w-3 mr-1.5" />
-                {eq}
-              </Button>
-            ))}
-          </div>
+        {/* Quick Actions */}
+        <div className="flex flex-wrap gap-2">
+          {exampleQuestions.map((eq, idx) => (
+            <Button
+              key={idx}
+              variant="outline"
+              size="sm"
+              className="text-xs h-8 px-3 bg-background/50 hover:bg-accent/10 hover:text-accent hover:border-accent/30 transition-all"
+              onClick={() => handleAskQuestion(eq)}
+              disabled={isLoading}
+            >
+              <Sparkles className="h-3 w-3 mr-1.5 text-accent" />
+              {eq}
+            </Button>
+          ))}
         </div>
 
         {/* Custom Question Input */}
         <div className="flex gap-2">
           <Textarea
-            placeholder="Ask a question about your attendance data..."
+            placeholder="Ask a strategic question..."
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            className="min-h-[60px] resize-none"
+            className="min-h-[50px] resize-none bg-background/50 border-border/50 focus:border-accent/50"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -154,7 +171,7 @@ export function AIInsightsPanel({ filters }: AIInsightsPanelProps) {
           <Button 
             onClick={handleSubmit} 
             disabled={isLoading || !question.trim()}
-            className="px-4"
+            className="px-4 bg-accent hover:bg-accent/90"
           >
             {isLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -166,19 +183,34 @@ export function AIInsightsPanel({ filters }: AIInsightsPanelProps) {
 
         {/* Response Area */}
         {(response || isLoading) && (
-          <div className={cn(
-            "rounded-lg border border-border bg-muted/30 p-4",
-            "prose prose-sm max-w-none dark:prose-invert"
-          )}>
-            {isLoading && !response && (
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Analyzing attendance data...</span>
-              </div>
-            )}
-            {response && (
-              <div className="whitespace-pre-wrap text-sm leading-relaxed">
-                {response}
+          <div className="space-y-4">
+            <div className={cn(
+              "rounded-xl border border-accent/20 bg-gradient-to-br from-background to-accent/5 p-4"
+            )}>
+              {isLoading && !response && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin text-accent" />
+                  <span className="text-sm">Analyzing institutional data...</span>
+                </div>
+              )}
+              {response && (
+                <div className="text-sm leading-relaxed text-foreground font-medium whitespace-pre-wrap">
+                  {response}
+                </div>
+              )}
+            </div>
+
+            {/* Insight-Driven Visuals */}
+            {response && !isLoading && (shouldShowSchoolChart || shouldShowProgramChart) && (
+              <div className="space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Supporting Visualization
+                </p>
+                <InsightMiniChart 
+                  type={shouldShowSchoolChart ? 'school' : 'program'}
+                  schoolData={schoolData}
+                  programData={programData}
+                />
               </div>
             )}
           </div>

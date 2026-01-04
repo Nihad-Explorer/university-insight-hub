@@ -12,9 +12,9 @@ interface AttendanceTrendChartProps {
 export function AttendanceTrendChart({ data, isLoading }: AttendanceTrendChartProps) {
   if (isLoading) {
     return (
-      <Card className="border-border bg-card">
+      <Card className="border-border/50 bg-card shadow-card">
         <CardHeader>
-          <CardTitle className="text-lg font-semibold">Attendance Trends Over Time</CardTitle>
+          <CardTitle className="text-lg font-bold">Attendance Trends</CardTitle>
         </CardHeader>
         <CardContent>
           <Skeleton className="h-[300px] w-full" />
@@ -29,25 +29,33 @@ export function AttendanceTrendChart({ data, isLoading }: AttendanceTrendChartPr
   }));
 
   return (
-    <Card className="border-border bg-card animate-slide-up">
-      <CardHeader>
-        <CardTitle className="text-lg font-semibold">Attendance Trends Over Time</CardTitle>
+    <Card className="border-border/50 bg-card shadow-card animate-slide-up">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-lg font-bold tracking-tight">Attendance Trends</CardTitle>
+        <p className="text-xs text-muted-foreground">Track daily patterns to identify intervention windows</p>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+          <LineChart data={chartData} margin={{ top: 20, right: 20, left: 10, bottom: 20 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" strokeOpacity={0.4} />
             <XAxis 
               dataKey="formattedDate" 
-              tick={{ fontSize: 11 }} 
-              className="fill-muted-foreground"
+              tick={{ fontSize: 10, fontWeight: 500, fill: 'hsl(var(--muted-foreground))' }}
+              axisLine={{ stroke: 'hsl(var(--border))' }}
+              tickLine={{ stroke: 'hsl(var(--border))' }}
             />
-            <YAxis tick={{ fontSize: 12 }} className="fill-muted-foreground" />
+            <YAxis 
+              tick={{ fontSize: 11, fontWeight: 500, fill: 'hsl(var(--muted-foreground))' }}
+              axisLine={{ stroke: 'hsl(var(--border))' }}
+              tickLine={{ stroke: 'hsl(var(--border))' }}
+            />
             <Tooltip 
               contentStyle={{ 
                 backgroundColor: 'hsl(var(--card))', 
                 border: '1px solid hsl(var(--border))',
-                borderRadius: '8px'
+                borderRadius: '10px',
+                boxShadow: 'var(--shadow-lg)',
+                fontSize: '12px'
               }}
               labelFormatter={(_, payload) => {
                 const date = payload?.[0]?.payload?.date;
@@ -58,9 +66,9 @@ export function AttendanceTrendChart({ data, isLoading }: AttendanceTrendChartPr
               type="monotone" 
               dataKey="count" 
               stroke="hsl(var(--accent))" 
-              strokeWidth={2}
-              dot={{ fill: 'hsl(var(--accent))', strokeWidth: 2 }}
-              activeDot={{ r: 6, fill: 'hsl(var(--accent))' }}
+              strokeWidth={2.5}
+              dot={{ fill: 'hsl(var(--accent))', strokeWidth: 0, r: 3 }}
+              activeDot={{ r: 6, fill: 'hsl(var(--accent))', stroke: 'hsl(var(--background))', strokeWidth: 2 }}
               name="Records"
             />
           </LineChart>

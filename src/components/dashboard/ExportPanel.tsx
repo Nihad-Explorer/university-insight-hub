@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Download, FileSpreadsheet } from 'lucide-react';
 import { DashboardFilters } from '@/types/attendance';
 import { useFilteredAttendanceRecords, useKPIData, useAttendanceBySchool, useProgramAttendance } from '@/hooks/useAttendanceData';
@@ -124,33 +123,31 @@ export function ExportPanel({ filters }: ExportPanelProps) {
   };
 
   return (
-    <Card className="border-border bg-card animate-fade-in">
-      <CardHeader className="pb-4">
-        <div className="flex items-center gap-2">
-          <FileSpreadsheet className="h-5 w-5 text-primary" />
-          <CardTitle className="text-lg font-semibold">Export Data</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent className="flex flex-wrap gap-3">
-        <Button 
-          variant="outline" 
-          onClick={handleExportRecords}
-          disabled={isExporting}
-          className="flex items-center gap-2"
-        >
-          <Download className="h-4 w-4" />
-          Export Filtered Records
-        </Button>
-        <Button 
-          variant="outline" 
-          onClick={handleExportSummary}
-          disabled={isExporting}
-          className="flex items-center gap-2"
-        >
-          <Download className="h-4 w-4" />
-          Export Summary Report
-        </Button>
-      </CardContent>
-    </Card>
+    <div className="flex items-center justify-center gap-4 py-6 border-t border-border/30 mt-8">
+      <div className="flex items-center gap-2 text-muted-foreground mr-4">
+        <FileSpreadsheet className="h-4 w-4" />
+        <span className="text-sm font-medium">Export Data</span>
+      </div>
+      <Button 
+        variant="outline" 
+        size="sm"
+        onClick={handleExportRecords}
+        disabled={isExporting}
+        className="text-xs h-8 hover:bg-muted/50"
+      >
+        <Download className="h-3 w-3 mr-1.5" />
+        Filtered Records
+      </Button>
+      <Button 
+        variant="outline" 
+        size="sm"
+        onClick={handleExportSummary}
+        disabled={isExporting}
+        className="text-xs h-8 hover:bg-muted/50"
+      >
+        <Download className="h-3 w-3 mr-1.5" />
+        Summary Report
+      </Button>
+    </div>
   );
 }
