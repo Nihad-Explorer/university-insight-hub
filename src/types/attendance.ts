@@ -80,7 +80,18 @@ export interface AttendanceBySchool {
 export interface AttendanceTrend {
   date: string;
   count: number;
+  year?: number;
   status?: AttendanceStatus;
+}
+
+export interface YearlyAttendanceTrend {
+  year: number;
+  present: number;
+  late: number;
+  excused: number;
+  absent: number;
+  total: number;
+  attendanceRate: number;
 }
 
 export interface ProgramAttendance {
@@ -94,4 +105,21 @@ export interface DeliveryModeAttendance {
   late: number;
   excused: number;
   absent: number;
+}
+
+export interface ModuleHotspot {
+  course_code: string;
+  course_title: string;
+  week_start: string;
+  absence_rate: number;
+  lateness_rate: number;
+  total_records: number;
+}
+
+export interface AutoInsight {
+  id: string;
+  title: string;
+  description: string;
+  severity: 'info' | 'warning' | 'critical';
+  icon: string;
 }

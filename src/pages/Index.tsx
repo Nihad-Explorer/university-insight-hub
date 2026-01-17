@@ -5,18 +5,22 @@ import { KPICard } from '@/components/dashboard/KPICard';
 import { FilterPanel } from '@/components/dashboard/FilterPanel';
 import { ExportPanel } from '@/components/dashboard/ExportPanel';
 import { AIInsightsPanel } from '@/components/dashboard/AIInsightsPanel';
+import { AutoInsightsPanel } from '@/components/dashboard/AutoInsightsPanel';
 import { AttendanceBySchoolChart } from '@/components/dashboard/charts/AttendanceBySchoolChart';
-import { AttendanceTrendChart } from '@/components/dashboard/charts/AttendanceTrendChart';
+import { YearlyTrendChart } from '@/components/dashboard/charts/YearlyTrendChart';
 import { ProgramAttendanceChart } from '@/components/dashboard/charts/ProgramAttendanceChart';
 import { DeliveryModeChart } from '@/components/dashboard/charts/DeliveryModeChart';
+import { ModuleHotspotsChart } from '@/components/dashboard/charts/ModuleHotspotsChart';
 import { DashboardFilters } from '@/types/attendance';
 import { 
   useKPIData, 
   useAttendanceBySchool, 
-  useAttendanceTrends, 
   useProgramAttendance, 
   useDeliveryModeAttendance 
 } from '@/hooks/useAttendanceData';
+import { useYearlyAttendanceTrends } from '@/hooks/useYearlyTrends';
+import { useModuleHotspots } from '@/hooks/useModuleHotspots';
+import { useAutoInsights } from '@/hooks/useAutoInsights';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 
@@ -24,6 +28,7 @@ const Index = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   
+  // Default to no date filters to show maximum data range
   const [filters, setFilters] = useState<DashboardFilters>({
     dateRange: { from: undefined, to: undefined },
     schoolId: null,
@@ -35,9 +40,17 @@ const Index = () => {
 
   const { data: kpiData, isLoading: kpiLoading } = useKPIData(filters);
   const { data: schoolData, isLoading: schoolLoading } = useAttendanceBySchool(filters);
-  const { data: trendData, isLoading: trendLoading } = useAttendanceTrends(filters);
+  const { data: yearlyTrendData, isLoading: yearlyTrendLoading } = useYearlyAttendanceTrends(filters);
   const { data: programData, isLoading: programLoading } = useProgramAttendance(filters);
   const { data: deliveryData, isLoading: deliveryLoading } = useDeliveryModeAttendance(filters);
+  const { data: moduleHotspots, isLoading: hotspotsLoading } = useModuleHotspots(filters);
+
+  // Auto-generated insights based on data
+  const autoInsights = useAutoInsights({
+    schoolData,
+    programData,
+    deliveryData,
+  });
 
   // Cap attendance rate at 100%
   const attendanceRate = Math.min(kpiData?.attendanceRate || 0, 100);
@@ -123,7 +136,12 @@ const Index = () => {
           />
         </div>
 
-        {/* AI Insights - Moved immediately after KPIs */}
+        {/* Auto-Generated AI Insights - Surface automatically */}
+        {autoInsights.length > 0 && (
+          <AutoInsightsPanel insights={autoInsights} />
+        )}
+
+        {/* AI Insights - Interactive */}
         <AIInsightsPanel 
           filters={filters} 
           schoolData={schoolData}
@@ -141,13 +159,16 @@ const Index = () => {
           
           <div className="grid gap-6 lg:grid-cols-2">
             <AttendanceBySchoolChart data={schoolData || []} isLoading={schoolLoading} />
-            <AttendanceTrendChart data={trendData || []} isLoading={trendLoading} />
+            <YearlyTrendChart data={yearlyTrendData || []} isLoading={yearlyTrendLoading} />
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
             <ProgramAttendanceChart data={programData || []} isLoading={programLoading} />
             <DeliveryModeChart data={deliveryData || []} isLoading={deliveryLoading} />
           </div>
+
+          {/* Module Hotspots */}
+          <ModuleHotspotsChart data={moduleHotspots || []} isLoading={hotspotsLoading} />
         </section>
 
         {/* Export Panel - Moved to bottom with reduced visual weight */}
