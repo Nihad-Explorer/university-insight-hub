@@ -6,6 +6,8 @@ import { Brain, Sparkles, Send, Loader2, Zap } from 'lucide-react';
 import { DashboardFilters, AttendanceBySchool, ProgramAttendance } from '@/types/attendance';
 import { cn } from '@/lib/utils';
 import { InsightMiniChart } from './InsightMiniChart';
+import { logger } from '@/lib/logger';
+import { supabase } from '@/integrations/supabase/client';
 
 interface AIInsightsPanelProps {
   filters: DashboardFilters;
@@ -33,17 +35,25 @@ export function AIInsightsPanel({ filters, schoolData, programData }: AIInsights
     setLastQuestion(q.toLowerCase());
     
     try {
+      // Get the current session token for authenticated requests
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        setResponse('Please log in to use AI insights.');
+        setIsLoading(false);
+        return;
+      }
+
       const resp = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-insights`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ 
           question: q,
           filters: {
-            dateFrom: filters.dateRange.from?.toISOString(),
-            dateTo: filters.dateRange.to?.toISOString(),
+            dateFrom: filters.dateRange.from?.toISOString().split('T')[0],
+            dateTo: filters.dateRange.to?.toISOString().split('T')[0],
             schoolId: filters.schoolId,
             programId: filters.programId,
             courseId: filters.courseId,
@@ -94,7 +104,7 @@ export function AIInsightsPanel({ filters, schoolData, programData }: AIInsights
         }
       }
     } catch (error) {
-      console.error('AI request failed:', error);
+      logger.error('AI request failed:', error);
       setResponse('Unable to analyze data. Please try again.');
     } finally {
       setIsLoading(false);
