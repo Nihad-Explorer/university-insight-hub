@@ -1,23 +1,12 @@
-import { createClient } from '@supabase/supabase-js';
+// Re-export the Lovable Cloud Supabase client for use throughout the app
+import { supabase } from '@/integrations/supabase/client';
 import { School, Program, Course, ClassSession, Student, AttendanceRecord } from '@/types/attendance';
 
-// External Supabase connection (Oxford project database)
-// Using environment variables for flexibility
-const EXTERNAL_SUPABASE_URL = import.meta.env.VITE_EXTERNAL_SUPABASE_URL;
-const EXTERNAL_SUPABASE_ANON_KEY = import.meta.env.VITE_EXTERNAL_SUPABASE_ANON_KEY;
-
-if (!EXTERNAL_SUPABASE_URL || !EXTERNAL_SUPABASE_ANON_KEY) {
-  console.error('Missing external Supabase credentials. Please set VITE_EXTERNAL_SUPABASE_URL and VITE_EXTERNAL_SUPABASE_ANON_KEY');
-}
-
-// Create client for the external Oxford Supabase database
-export const supabaseClient = createClient(
-  EXTERNAL_SUPABASE_URL || '',
-  EXTERNAL_SUPABASE_ANON_KEY || ''
-);
+// Export the Lovable Cloud client as supabaseClient for compatibility
+export const supabaseClient = supabase;
 
 // Export URL for reference
-export const PROJECT_URL = EXTERNAL_SUPABASE_URL;
+export const PROJECT_URL = import.meta.env.VITE_SUPABASE_URL;
 
 // Database types for the existing tables
 export interface DatabaseSchema {
