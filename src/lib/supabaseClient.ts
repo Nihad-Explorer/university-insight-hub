@@ -1,15 +1,23 @@
 import { createClient } from '@supabase/supabase-js';
 import { School, Program, Course, ClassSession, Student, AttendanceRecord } from '@/types/attendance';
 
-// External Supabase connection (user's own database)
-// Note: These are publishable/anon keys - designed for client-side use with RLS protection
-export const PROJECT_URL = 'https://wcsozwskjfrpuhqhbzml.supabase.co';
-const EXTERNAL_SUPABASE_ANON_KEY = 'sb_publishable_GFYhs8MaoPC4-ngQie_QEQ__Calvkb-';
+// External Supabase connection (Oxford project database)
+// Using environment variables for flexibility
+const EXTERNAL_SUPABASE_URL = import.meta.env.VITE_EXTERNAL_SUPABASE_URL;
+const EXTERNAL_SUPABASE_ANON_KEY = import.meta.env.VITE_EXTERNAL_SUPABASE_ANON_KEY;
 
-// Create client for the external Supabase database
-// IMPORTANT: The URL must be the *Project URL* (no /rest/v1, no trailing slash).
-export const supabaseClient = createClient(PROJECT_URL, EXTERNAL_SUPABASE_ANON_KEY);
+if (!EXTERNAL_SUPABASE_URL || !EXTERNAL_SUPABASE_ANON_KEY) {
+  console.error('Missing external Supabase credentials. Please set VITE_EXTERNAL_SUPABASE_URL and VITE_EXTERNAL_SUPABASE_ANON_KEY');
+}
 
+// Create client for the external Oxford Supabase database
+export const supabaseClient = createClient(
+  EXTERNAL_SUPABASE_URL || '',
+  EXTERNAL_SUPABASE_ANON_KEY || ''
+);
+
+// Export URL for reference
+export const PROJECT_URL = EXTERNAL_SUPABASE_URL;
 
 // Database types for the existing tables
 export interface DatabaseSchema {
