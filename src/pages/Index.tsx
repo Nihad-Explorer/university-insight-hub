@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Users, Calendar, ClipboardList, TrendingUp, Radio } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Users, Calendar, ClipboardList, TrendingUp, Radio, LogOut } from 'lucide-react';
 import { KPICard } from '@/components/dashboard/KPICard';
 import { FilterPanel } from '@/components/dashboard/FilterPanel';
 import { ExportPanel } from '@/components/dashboard/ExportPanel';
@@ -16,8 +17,13 @@ import {
   useProgramAttendance, 
   useDeliveryModeAttendance 
 } from '@/hooks/useAttendanceData';
+import { useAuth } from '@/hooks/useAuth';
+import { Button } from '@/components/ui/button';
 
 const Index = () => {
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+  
   const [filters, setFilters] = useState<DashboardFilters>({
     dateRange: { from: undefined, to: undefined },
     schoolId: null,
@@ -50,9 +56,28 @@ const Index = () => {
                 Executive-level visibility into attendance, engagement, and delivery effectiveness
               </p>
             </div>
-            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-success/10 border border-success/20">
-              <Radio className="h-3 w-3 text-success animate-pulse" />
-              <span className="text-xs font-semibold text-success">Live Institutional Data</span>
+            <div className="flex items-center gap-4">
+              <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-success/10 border border-success/20">
+                <Radio className="h-3 w-3 text-success animate-pulse" />
+                <span className="text-xs font-semibold text-success">Live Institutional Data</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-muted-foreground hidden sm:inline">
+                  {user?.email}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    await signOut();
+                    navigate('/auth');
+                  }}
+                  className="gap-2"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span className="hidden sm:inline">Sign Out</span>
+                </Button>
+              </div>
             </div>
           </div>
         </div>

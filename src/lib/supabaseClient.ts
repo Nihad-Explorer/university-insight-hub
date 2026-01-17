@@ -2,8 +2,16 @@ import { createClient } from '@supabase/supabase-js';
 import { School, Program, Course, ClassSession, Student, AttendanceRecord } from '@/types/attendance';
 
 // External Supabase connection (user's own database)
-export const PROJECT_URL = 'https://wcsozwskjfrpuhqhbzml.supabase.co';
-const EXTERNAL_SUPABASE_ANON_KEY = 'sb_publishable_GFYhs8MaoPC4-ngQie_QEQ__Calvkb-';
+// Credentials moved to environment variables for security
+const PROJECT_URL = import.meta.env.VITE_EXTERNAL_SUPABASE_URL;
+const EXTERNAL_SUPABASE_ANON_KEY = import.meta.env.VITE_EXTERNAL_SUPABASE_ANON_KEY;
+
+if (!PROJECT_URL || !EXTERNAL_SUPABASE_ANON_KEY) {
+  throw new Error('External Supabase credentials not configured. Check environment variables.');
+}
+
+// Export for connectivity checks (URL only, not the key)
+export { PROJECT_URL };
 
 // Create client for the external Supabase database
 // IMPORTANT: The URL must be the *Project URL* (no /rest/v1, no trailing slash).
@@ -19,4 +27,3 @@ export interface DatabaseSchema {
   uol_students: Student;
   uol_attendance: AttendanceRecord;
 }
-
