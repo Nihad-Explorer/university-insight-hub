@@ -28,9 +28,13 @@ const Index = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   
+  // Default date range: last 3 months for faster initial load
+  const defaultFrom = new Date();
+  defaultFrom.setMonth(defaultFrom.getMonth() - 3);
+  
   // Default filters aligned to new schema
   const [filters, setFilters] = useState<DashboardFilters>({
-    dateRange: { from: undefined, to: undefined },
+    dateRange: { from: defaultFrom, to: new Date() },
     academicYear: null,
     term: null,
     school: null,
