@@ -28,14 +28,11 @@ const Index = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   
-  // Default date range: Based on actual data (Jan 2025 data)
-  // Start with no date filter to load all data, or set to known data range
-  const defaultFrom = new Date('2025-01-01');
-  const defaultTo = new Date('2025-12-31');
+  // Default to 2025 data
+  const defaultYear = 2025;
   
-  // Default filters aligned to new schema
   const [filters, setFilters] = useState<DashboardFilters>({
-    dateRange: { from: defaultFrom, to: defaultTo },
+    dateRange: { from: new Date(defaultYear, 0, 1), to: new Date(defaultYear, 11, 31) },
     academicYear: null,
     term: null,
     school: null,

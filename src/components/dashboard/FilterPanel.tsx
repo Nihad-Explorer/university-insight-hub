@@ -1,13 +1,8 @@
-import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarIcon, Filter, RotateCcw } from 'lucide-react';
-import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
+import { Filter, RotateCcw } from 'lucide-react';
 import { DashboardFilters, AttendanceStatus, DeliveryMode, ProgrammeLevel, Term } from '@/types/attendance';
 import { 
   useSchools, 
@@ -17,6 +12,9 @@ import {
   useCourses, 
   useCohortYears 
 } from '@/hooks/useAttendanceData';
+
+// Available years for the date filter dropdown
+const AVAILABLE_YEARS = ['2022', '2023', '2024', '2025', '2026'];
 
 interface FilterPanelProps {
   filters: DashboardFilters;
@@ -79,47 +77,35 @@ export function FilterPanel({ filters, onFiltersChange }: FilterPanelProps) {
         </div>
       </CardHeader>
       <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        {/* Date Range */}
+        {/* Year Filter */}
         <div className="space-y-2">
-          <Label className="text-sm font-medium text-muted-foreground">Date Range</Label>
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="outline"
-                className={cn(
-                  'w-full justify-start text-left font-normal',
-                  !filters.dateRange.from && 'text-muted-foreground'
-                )}
-              >
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {filters.dateRange.from ? (
-                  filters.dateRange.to ? (
-                    <>
-                      {format(filters.dateRange.from, 'MMM d')} - {format(filters.dateRange.to, 'MMM d')}
-                    </>
-                  ) : (
-                    format(filters.dateRange.from, 'PPP')
-                  )
-                ) : (
-                  'Select dates'
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                initialFocus
-                mode="range"
-                defaultMonth={filters.dateRange.from}
-                selected={{
-                  from: filters.dateRange.from,
-                  to: filters.dateRange.to,
-                }}
-                onSelect={(range) => updateFilter('dateRange', { from: range?.from, to: range?.to })}
-                numberOfMonths={2}
-                className="pointer-events-auto"
-              />
-            </PopoverContent>
-          </Popover>
+          <Label className="text-sm font-medium text-muted-foreground">Year</Label>
+          <Select
+            value={filters.dateRange.from ? String(filters.dateRange.from.getFullYear()) : 'all'}
+            onValueChange={(value) => {
+              if (value === 'all') {
+                updateFilter('dateRange', { from: undefined, to: undefined });
+              } else {
+                const year = parseInt(value);
+                updateFilter('dateRange', { 
+                  from: new Date(year, 0, 1), 
+                  to: new Date(year, 11, 31) 
+                });
+              }
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="All Years" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Years</SelectItem>
+              {AVAILABLE_YEARS.map((year) => (
+                <SelectItem key={year} value={year}>
+                  {year}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Academic Year */}
