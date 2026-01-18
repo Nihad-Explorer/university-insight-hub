@@ -2,3 +2,6 @@ project_id = "fscbirijtxzymwnlcico"
 
 [functions.ai-insights]
 verify_jwt = false
+
+[functions.generate-synthetic-data]
+verify_jwt = false
