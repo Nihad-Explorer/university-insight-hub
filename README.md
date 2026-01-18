@@ -11,65 +11,114 @@ Universities face significant challenges in tracking and understanding student a
 - **Executive-grade reporting** suitable for senior leadership and governance committees
 - **Data-driven intervention** capabilities to identify at-risk programs and students
 
-## Data Model (Supabase)
+## Data Model
 
-The dashboard connects to a Supabase PostgreSQL database with the following schema:
+The dashboard connects to an **external Supabase PostgreSQL database** with a simplified 2-table star schema:
 
 ### Tables
 
-| Table | Description |
-|-------|-------------|
-| `uol_schools` | Academic schools/faculties (e.g., School of Law, School of Engineering) |
-| `uol_programs` | Degree programs within schools |
-| `uol_courses` | Individual courses within programs |
-| `uol_students` | Student records with demographic information |
-| `uol_class_sessions` | Scheduled class sessions with delivery mode and instructor |
-| `uol_attendance` | Attendance records linking students to sessions with status |
+| Table | Type | Description |
+|-------|------|-------------|
+| `students_dim` | Dimension | Student master data with demographics and programme info |
+| `attendance_fact` | Fact | Denormalized attendance records with all analytical dimensions |
 
-### Relationships
+### students_dim (Dimension Table)
 
-```
-Schools → Programs → Courses → Class Sessions → Attendance Records
-                 ↘ Students ↗
-```
+| Column | Type | Description |
+|--------|------|-------------|
+| `student_id` | text | Primary key |
+| `student_number` | text | University ID number |
+| `first_name` | text | Student first name |
+| `last_name` | text | Student last name |
+| `school` | text | Academic school |
+| `programme_level` | text | Bachelors / Masters / PhD |
+| `programme_name` | text | Degree programme name |
+| `cohort_year` | int | Entry year |
+| `study_mode` | text | Full-time / Part-time |
+| `status` | text | Active / Leave / Withdrawn |
+| `home_international` | text | Home / International |
 
-### Attendance Statuses
+### attendance_fact (Fact Table)
 
-- **Present**: Student attended on time
-- **Late**: Student arrived after session start
-- **Excused**: Approved absence
-- **Absent**: Unexcused absence
+| Column | Type | Description |
+|--------|------|-------------|
+| `attendance_id` | bigint | Primary key |
+| `student_id` | text | Foreign key to students_dim |
+| `session_date` | date | Date of the session |
+| `week_start` | date | Week start for aggregation |
+| `iso_week` | int | ISO week number |
+| `term` | text | Autumn / Spring / Summer |
+| `academic_year` | text | e.g., 2024/2025 |
+| `school` | text | Academic school (denormalized) |
+| `programme_level` | text | Bachelors / Masters / PhD |
+| `programme_name` | text | Degree programme name |
+| `cohort_year` | int | Student entry year |
+| `course_code` | text | Course identifier |
+| `course_title` | text | Course name |
+| `session_type` | text | Lecture / Seminar / Lab |
+| `delivery_mode` | text | In-person / Online |
+| `instructor` | text | Instructor name |
+| `room` | text | Room location |
+| `attendance_status` | text | Present / Late / Absent / Excused |
+| `scheduled_minutes` | int | Session duration |
+| `minutes_attended` | int | Actual attendance time |
+| `minutes_late` | int | Lateness in minutes |
+| `check_in_method` | text | QR / LMS / Manual |
+
+### Data Volume
+
+- **~4,000 students** in students_dim
+- **~172,000 attendance records** in attendance_fact
 
 ## Dashboard KPIs
 
 | KPI | Calculation | Purpose |
 |-----|-------------|---------|
-| **Total Students** | Count of unique enrolled students | Measure cohort size |
-| **Class Sessions** | Count of delivered sessions | Track teaching activity |
-| **Attendance Records** | Total recorded entries | Data completeness indicator |
-| **Attendance Rate** | Present / (Present + Absent) | Core engagement metric |
+| **Total Students** | Count of unique `student_id` | Active cohort size |
+| **Total Records** | Count of attendance entries | Data completeness |
+| **Attendance Rate** | (Present + Late) / Total × 100 | Core engagement metric |
+| **Absence Rate** | Absent / Total × 100 | Risk indicator |
+| **Lateness Rate** | Late / Total × 100 | Punctuality metric |
+| **At-Risk Students** | Students with <80% rate OR 3+ absences in 4 weeks | Intervention targeting |
+
+## Filters
+
+The dashboard supports comprehensive filtering:
+
+- **Year** — Filter by calendar year (2022-2026)
+- **Academic Year** — e.g., 2024/2025
+- **Term** — Autumn / Spring / Summer
+- **School** — Academic unit
+- **Programme Level** — Bachelors / Masters / PhD
+- **Programme Name** — Specific degree
+- **Course** — Individual course
+- **Cohort** — Entry year
+- **Status** — Present / Late / Absent / Excused
+- **Delivery Mode** — In-person / Online
 
 ## Charts & Visualizations
 
-1. **Attendance by School** — Stacked bar chart comparing status distribution across academic units
-2. **Attendance Trends** — Line chart showing daily patterns for intervention timing
-3. **Attendance by Program** — Horizontal bar chart ranking programs by attendance rate
-4. **Delivery Mode Analysis** — Grouped comparison of online vs in-person effectiveness
+1. **Absence Rate by School** — Bar chart ranking schools by absence rate
+2. **Weekly Attendance Trend** — Line chart showing attendance rate over time
+3. **Programme Attendance** — Horizontal bar chart ranking programmes
+4. **Delivery Mode Comparison** — Stacked bar comparing In-person vs Online
+5. **Module Hotspots** — Table of courses with highest absence rates (min 200 records)
 
 ## AI Insights Capability
 
 The dashboard includes an AI-powered insights panel that:
 
 - Accepts natural language questions about attendance data
-- Returns concise, executive-style responses (max 3 bullets, 1 sentence each)
-- Automatically generates supporting visualizations for comparison queries
+- Returns concise, executive-style responses
+- Automatically generates 3 insights when filters change
 - Uses real institutional data with applied filters
 
 ### Example Queries
 
-- "Which school has the highest absenteeism?"
-- "Compare online vs in-person attendance"
-- "Which programs need intervention?"
+- "Which school dropped most in the last 2 weeks?"
+- "Top 10 courses by absence rate this term"
+- "Do online sessions improve attendance for Masters?"
+- "Which cohorts are below 80% attendance?"
 
 ## Tech Stack
 
@@ -79,72 +128,54 @@ The dashboard includes an AI-powered insights panel that:
 | **Styling** | Tailwind CSS, shadcn/ui components |
 | **Charts** | Recharts |
 | **State** | TanStack React Query |
-| **Backend** | Supabase (PostgreSQL + Edge Functions) |
-| **AI** | Lovable AI Gateway (LLM reasoning) |
+| **Database** | External Supabase PostgreSQL |
+| **AI** | Lovable AI Gateway |
 | **Hosting** | Lovable Cloud |
 
-## Intended Use Cases
+## Architecture Notes
 
-### Primary Users
+- **External Database**: Connects to a separate Supabase project for data
+- **Pagination**: All queries use pagination to handle 172K+ records efficiently
+- **Denormalized Fact Table**: Most analytics run against `attendance_fact` only
+- **Join for Details**: `students_dim` joined only for student names in drilldowns
 
-- **Vice-Chancellor / Provost** — Institutional overview and strategic planning
-- **Deans / School Directors** — School-level performance monitoring
-- **Strategy & Planning Committee** — Data-driven policy development
-- **Student Services** — Early intervention identification
+## Intended Users
 
-### Key Scenarios
-
-1. **Weekly leadership briefings** — Quick overview of engagement health
-2. **Program reviews** — Evidence-based curriculum decisions
-3. **Delivery mode evaluation** — Post-pandemic teaching strategy
-4. **At-risk identification** — Proactive student support targeting
+- **Vice-Chancellor / Provost** — Institutional overview
+- **Deans / School Directors** — School-level monitoring
+- **Strategy Committee** — Data-driven policy
+- **Student Services** — At-risk identification
 
 ## Getting Started
 
 1. Clone the repository
 2. Install dependencies: `npm install`
-3. Configure environment variables for Supabase connection
+3. Configure Supabase connection in `src/lib/externalSupabaseClient.ts`
 4. Run development server: `npm run dev`
 
-## Project Info
+## Live Demo
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+**Published URL**: https://uni-flow-stats.lovable.app
 
-## How can I edit this code?
-
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+## Development
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
+# Clone the repository
 git clone <YOUR_GIT_URL>
 
-# Step 2: Navigate to the project directory.
+# Navigate to project
 cd <YOUR_PROJECT_NAME>
 
-# Step 3: Install the necessary dependencies.
-npm i
+# Install dependencies
+npm install
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start development server
 npm run dev
 ```
 
-## How can I deploy this project?
+## Deployment
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+Open Lovable and click **Share → Publish** to deploy.
 
 ## License
 
