@@ -12,21 +12,51 @@ import {
   FilterOption
 } from '@/types/attendance';
 
+// Helper function to fetch all rows with pagination (Supabase default limit is 1000)
+async function fetchAllRows<T>(
+  queryBuilder: any,
+  selectColumns: string,
+  pageSize: number = 10000
+): Promise<T[]> {
+  const allRows: T[] = [];
+  let offset = 0;
+  let hasMore = true;
+  
+  while (hasMore) {
+    const { data, error } = await queryBuilder
+      .select(selectColumns)
+      .range(offset, offset + pageSize - 1);
+    
+    if (error) throw error;
+    
+    if (data && data.length > 0) {
+      allRows.push(...data);
+      offset += pageSize;
+      hasMore = data.length === pageSize;
+    } else {
+      hasMore = false;
+    }
+  }
+  
+  return allRows;
+}
+
 // ===== FILTER OPTIONS HOOKS =====
 
 export function useSchools() {
   return useQuery({
     queryKey: ['schools'],
     queryFn: async (): Promise<FilterOption[]> => {
+      // Use a subquery approach - just get distinct values
       const { data, error } = await externalSupabase
         .from(TABLES.ATTENDANCE_FACT)
         .select('school')
-        .order('school');
+        .limit(100000);
       
       if (error) throw error;
       
       const unique = [...new Set(data?.map(d => d.school).filter(Boolean))];
-      return unique.map(s => ({ value: s, label: s }));
+      return unique.sort().map(s => ({ value: s, label: s }));
     },
   });
 }
@@ -38,12 +68,12 @@ export function useAcademicYears() {
       const { data, error } = await externalSupabase
         .from(TABLES.ATTENDANCE_FACT)
         .select('academic_year')
-        .order('academic_year', { ascending: false });
+        .limit(100000);
       
       if (error) throw error;
       
       const unique = [...new Set(data?.map(d => d.academic_year).filter(Boolean))];
-      return unique.map(y => ({ value: y, label: y }));
+      return unique.sort().reverse().map(y => ({ value: y, label: y }));
     },
   });
 }
@@ -55,12 +85,12 @@ export function useProgrammeLevels() {
       const { data, error } = await externalSupabase
         .from(TABLES.ATTENDANCE_FACT)
         .select('programme_level')
-        .order('programme_level');
+        .limit(100000);
       
       if (error) throw error;
       
       const unique = [...new Set(data?.map(d => d.programme_level).filter(Boolean))];
-      return unique.map(l => ({ value: l, label: l }));
+      return unique.sort().map(l => ({ value: l, label: l }));
     },
   });
 }
@@ -71,17 +101,18 @@ export function useProgrammeNames(school?: string | null) {
     queryFn: async (): Promise<FilterOption[]> => {
       let query = externalSupabase
         .from(TABLES.ATTENDANCE_FACT)
-        .select('programme_name');
+        .select('programme_name')
+        .limit(100000);
       
       if (school) {
         query = query.eq('school', school);
       }
       
-      const { data, error } = await query.order('programme_name');
+      const { data, error } = await query;
       if (error) throw error;
       
       const unique = [...new Set(data?.map(d => d.programme_name).filter(Boolean))];
-      return unique.map(p => ({ value: p, label: p }));
+      return unique.sort().map(p => ({ value: p, label: p }));
     },
   });
 }
@@ -92,12 +123,13 @@ export function useCourses(school?: string | null, programmeName?: string | null
     queryFn: async (): Promise<FilterOption[]> => {
       let query = externalSupabase
         .from(TABLES.ATTENDANCE_FACT)
-        .select('course_code, course_title');
+        .select('course_code, course_title')
+        .limit(100000);
       
       if (school) query = query.eq('school', school);
       if (programmeName) query = query.eq('programme_name', programmeName);
       
-      const { data, error } = await query.order('course_code');
+      const { data, error } = await query;
       if (error) throw error;
       
       const courseMap = new Map<string, string>();
@@ -107,10 +139,12 @@ export function useCourses(school?: string | null, programmeName?: string | null
         }
       });
       
-      return Array.from(courseMap.entries()).map(([code, title]) => ({
-        value: code,
-        label: `${code}: ${title}`,
-      }));
+      return Array.from(courseMap.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([code, title]) => ({
+          value: code,
+          label: `${code}: ${title}`,
+        }));
     },
   });
 }
@@ -122,15 +156,16 @@ export function useCohortYears() {
       const { data, error } = await externalSupabase
         .from(TABLES.ATTENDANCE_FACT)
         .select('cohort_year')
-        .order('cohort_year', { ascending: false });
+        .limit(100000);
       
       if (error) throw error;
       
       const unique = [...new Set(data?.map(d => d.cohort_year).filter(Boolean))];
-      return unique.map(y => ({ value: String(y), label: String(y) }));
+      return unique.sort((a, b) => b - a).map(y => ({ value: String(y), label: String(y) }));
     },
   });
 }
+
 
 // ===== HELPER: Build filtered query =====
 function applyFilters(query: any, filters: DashboardFilters) {
@@ -170,22 +205,50 @@ function applyFilters(query: any, filters: DashboardFilters) {
   return query;
 }
 
+// Helper to fetch all paginated data
+async function fetchAllFilteredData(
+  filters: DashboardFilters,
+  selectColumns: string,
+  pageSize: number = 50000
+): Promise<any[]> {
+  const allRows: any[] = [];
+  let offset = 0;
+  let hasMore = true;
+  
+  while (hasMore) {
+    let query = externalSupabase
+      .from(TABLES.ATTENDANCE_FACT)
+      .select(selectColumns)
+      .range(offset, offset + pageSize - 1);
+    
+    query = applyFilters(query, filters);
+    
+    const { data, error } = await query;
+    if (error) throw error;
+    
+    if (data && data.length > 0) {
+      allRows.push(...data);
+      offset += pageSize;
+      hasMore = data.length === pageSize;
+    } else {
+      hasMore = false;
+    }
+  }
+  
+  return allRows;
+}
+
 // ===== KPI DATA HOOK =====
 export function useKPIData(filters: DashboardFilters) {
   return useQuery({
     queryKey: ['kpi', filters],
     queryFn: async (): Promise<KPIData> => {
-      // Get all filtered records
-      let query = externalSupabase
-        .from(TABLES.ATTENDANCE_FACT)
-        .select('attendance_id, student_id, attendance_status, session_date');
+      // Use pagination to get ALL filtered records
+      const records = await fetchAllFilteredData(
+        filters,
+        'attendance_id, student_id, attendance_status, session_date'
+      );
       
-      query = applyFilters(query, filters);
-      
-      const { data, error } = await query;
-      if (error) throw error;
-      
-      const records = data || [];
       const totalRecords = records.length;
       const uniqueStudents = new Set(records.map(r => r.student_id)).size;
       
@@ -249,18 +312,11 @@ export function useAttendanceBySchool(filters: DashboardFilters) {
   return useQuery({
     queryKey: ['attendanceBySchool', filters],
     queryFn: async (): Promise<AttendanceBySchool[]> => {
-      let query = externalSupabase
-        .from(TABLES.ATTENDANCE_FACT)
-        .select('school, attendance_status');
-      
-      query = applyFilters(query, filters);
-      
-      const { data, error } = await query;
-      if (error) throw error;
+      const data = await fetchAllFilteredData(filters, 'school, attendance_status');
       
       const schoolMap = new Map<string, { present: number; late: number; excused: number; absent: number }>();
       
-      (data || []).forEach(r => {
+      data.forEach(r => {
         if (!r.school) return;
         if (!schoolMap.has(r.school)) {
           schoolMap.set(r.school, { present: 0, late: 0, excused: 0, absent: 0 });
@@ -298,18 +354,11 @@ export function useWeeklyTrends(filters: DashboardFilters) {
   return useQuery({
     queryKey: ['weeklyTrends', filters],
     queryFn: async (): Promise<WeeklyTrend[]> => {
-      let query = externalSupabase
-        .from(TABLES.ATTENDANCE_FACT)
-        .select('week_start, attendance_status');
-      
-      query = applyFilters(query, filters);
-      
-      const { data, error } = await query;
-      if (error) throw error;
+      const data = await fetchAllFilteredData(filters, 'week_start, attendance_status');
       
       const weekMap = new Map<string, { attended: number; total: number }>();
       
-      (data || []).forEach(r => {
+      data.forEach(r => {
         if (!r.week_start) return;
         if (!weekMap.has(r.week_start)) {
           weekMap.set(r.week_start, { attended: 0, total: 0 });
@@ -340,18 +389,11 @@ export function useProgramAttendance(filters: DashboardFilters) {
   return useQuery({
     queryKey: ['programAttendance', filters],
     queryFn: async (): Promise<ProgramAttendance[]> => {
-      let query = externalSupabase
-        .from(TABLES.ATTENDANCE_FACT)
-        .select('programme_name, attendance_status');
-      
-      query = applyFilters(query, filters);
-      
-      const { data, error } = await query;
-      if (error) throw error;
+      const data = await fetchAllFilteredData(filters, 'programme_name, attendance_status');
       
       const programMap = new Map<string, { attended: number; total: number }>();
       
-      (data || []).forEach(r => {
+      data.forEach(r => {
         if (!r.programme_name) return;
         if (!programMap.has(r.programme_name)) {
           programMap.set(r.programme_name, { attended: 0, total: 0 });
@@ -382,18 +424,11 @@ export function useDeliveryModeAttendance(filters: DashboardFilters) {
   return useQuery({
     queryKey: ['deliveryModeAttendance', filters],
     queryFn: async (): Promise<DeliveryModeAttendance[]> => {
-      let query = externalSupabase
-        .from(TABLES.ATTENDANCE_FACT)
-        .select('delivery_mode, attendance_status');
-      
-      query = applyFilters(query, filters);
-      
-      const { data, error } = await query;
-      if (error) throw error;
+      const data = await fetchAllFilteredData(filters, 'delivery_mode, attendance_status');
       
       const modeMap = new Map<string, { present: number; late: number; excused: number; absent: number }>();
       
-      (data || []).forEach(r => {
+      data.forEach(r => {
         if (!r.delivery_mode) return;
         if (!modeMap.has(r.delivery_mode)) {
           modeMap.set(r.delivery_mode, { present: 0, late: 0, excused: 0, absent: 0 });
@@ -432,14 +467,10 @@ export function useModuleHotspots(filters: DashboardFilters, minSampleSize: numb
   return useQuery({
     queryKey: ['moduleHotspots', filters, minSampleSize],
     queryFn: async (): Promise<ModuleHotspot[]> => {
-      let query = externalSupabase
-        .from(TABLES.ATTENDANCE_FACT)
-        .select('course_code, course_title, school, programme_level, attendance_status');
-      
-      query = applyFilters(query, filters);
-      
-      const { data, error } = await query;
-      if (error) throw error;
+      const data = await fetchAllFilteredData(
+        filters, 
+        'course_code, course_title, school, programme_level, attendance_status'
+      );
       
       const courseMap = new Map<string, {
         course_title: string;
@@ -451,7 +482,7 @@ export function useModuleHotspots(filters: DashboardFilters, minSampleSize: numb
         total: number;
       }>();
       
-      (data || []).forEach(r => {
+      data.forEach(r => {
         if (!r.course_code) return;
         if (!courseMap.has(r.course_code)) {
           courseMap.set(r.course_code, {
@@ -500,15 +531,11 @@ export function useAtRiskStudents(filters: DashboardFilters) {
   return useQuery({
     queryKey: ['atRiskStudents', filters],
     queryFn: async (): Promise<AtRiskStudent[]> => {
-      // Get filtered attendance data
-      let query = externalSupabase
-        .from(TABLES.ATTENDANCE_FACT)
-        .select('student_id, attendance_status, session_date');
-      
-      query = applyFilters(query, filters);
-      
-      const { data: attendanceData, error: attendanceError } = await query;
-      if (attendanceError) throw attendanceError;
+      // Get filtered attendance data with pagination
+      const attendanceData = await fetchAllFilteredData(
+        filters,
+        'student_id, attendance_status, session_date'
+      );
       
       // Calculate student stats
       const studentStats = new Map<string, {
@@ -519,13 +546,13 @@ export function useAtRiskStudents(filters: DashboardFilters) {
         lastSeen: string | null;
       }>();
       
-      const maxDate = attendanceData && attendanceData.length > 0 
+      const maxDate = attendanceData.length > 0 
         ? new Date(Math.max(...attendanceData.map(r => new Date(r.session_date).getTime())))
         : new Date();
       const fourWeeksAgo = new Date(maxDate);
       fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
       
-      (attendanceData || []).forEach(r => {
+      attendanceData.forEach(r => {
         if (!studentStats.has(r.student_id)) {
           studentStats.set(r.student_id, { total: 0, attended: 0, absences: 0, lates: 0, lastSeen: null });
         }
