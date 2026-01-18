@@ -8,8 +8,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CalendarIcon, Filter, RotateCcw } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { DashboardFilters, AttendanceStatus, DeliveryMode } from '@/types/attendance';
-import { useSchools, usePrograms, useCourses } from '@/hooks/useAttendanceData';
+import { DashboardFilters, AttendanceStatus, DeliveryMode, ProgrammeLevel, Term } from '@/types/attendance';
+import { 
+  useSchools, 
+  useAcademicYears, 
+  useProgrammeLevels, 
+  useProgrammeNames, 
+  useCourses, 
+  useCohortYears 
+} from '@/hooks/useAttendanceData';
 
 interface FilterPanelProps {
   filters: DashboardFilters;
@@ -18,29 +25,36 @@ interface FilterPanelProps {
 
 export function FilterPanel({ filters, onFiltersChange }: FilterPanelProps) {
   const { data: schools } = useSchools();
-  const { data: programs } = usePrograms(filters.schoolId);
-  const { data: courses } = useCourses(filters.programId);
+  const { data: academicYears } = useAcademicYears();
+  const { data: programmeLevels } = useProgrammeLevels();
+  const { data: programmeNames } = useProgrammeNames(filters.school);
+  const { data: courses } = useCourses(filters.school, filters.programmeName);
+  const { data: cohortYears } = useCohortYears();
 
   const handleReset = () => {
     onFiltersChange({
       dateRange: { from: undefined, to: undefined },
-      schoolId: null,
-      programId: null,
-      courseId: null,
-      status: null,
+      academicYear: null,
+      term: null,
+      school: null,
+      programmeLevel: null,
+      programmeName: null,
+      courseCode: null,
+      cohortYear: null,
       deliveryMode: null,
+      status: null,
     });
   };
 
   const updateFilter = <K extends keyof DashboardFilters>(key: K, value: DashboardFilters[K]) => {
     const newFilters = { ...filters, [key]: value };
     // Reset dependent filters when parent changes
-    if (key === 'schoolId') {
-      newFilters.programId = null;
-      newFilters.courseId = null;
+    if (key === 'school') {
+      newFilters.programmeName = null;
+      newFilters.courseCode = null;
     }
-    if (key === 'programId') {
-      newFilters.courseId = null;
+    if (key === 'programmeName') {
+      newFilters.courseCode = null;
     }
     onFiltersChange(newFilters);
   };
@@ -64,7 +78,7 @@ export function FilterPanel({ filters, onFiltersChange }: FilterPanelProps) {
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <CardContent className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {/* Date Range */}
         <div className="space-y-2">
           <Label className="text-sm font-medium text-muted-foreground">Date Range</Label>
@@ -108,12 +122,52 @@ export function FilterPanel({ filters, onFiltersChange }: FilterPanelProps) {
           </Popover>
         </div>
 
+        {/* Academic Year */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium text-muted-foreground">Academic Year</Label>
+          <Select
+            value={filters.academicYear || 'all'}
+            onValueChange={(value) => updateFilter('academicYear', value === 'all' ? null : value)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="All Years" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Years</SelectItem>
+              {academicYears?.map((year) => (
+                <SelectItem key={year.value} value={year.value}>
+                  {year.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Term */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium text-muted-foreground">Term</Label>
+          <Select
+            value={filters.term || 'all'}
+            onValueChange={(value) => updateFilter('term', value === 'all' ? null : value as Term)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="All Terms" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Terms</SelectItem>
+              <SelectItem value="Autumn">Autumn</SelectItem>
+              <SelectItem value="Spring">Spring</SelectItem>
+              <SelectItem value="Summer">Summer</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         {/* School */}
         <div className="space-y-2">
           <Label className="text-sm font-medium text-muted-foreground">School</Label>
           <Select
-            value={filters.schoolId || 'all'}
-            onValueChange={(value) => updateFilter('schoolId', value === 'all' ? null : value)}
+            value={filters.school || 'all'}
+            onValueChange={(value) => updateFilter('school', value === 'all' ? null : value)}
           >
             <SelectTrigger>
               <SelectValue placeholder="All Schools" />
@@ -121,29 +175,50 @@ export function FilterPanel({ filters, onFiltersChange }: FilterPanelProps) {
             <SelectContent>
               <SelectItem value="all">All Schools</SelectItem>
               {schools?.map((school) => (
-                <SelectItem key={school.school_id} value={school.school_id}>
-                  {school.school_name}
+                <SelectItem key={school.value} value={school.value}>
+                  {school.label}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
 
-        {/* Program */}
+        {/* Programme Level */}
         <div className="space-y-2">
-          <Label className="text-sm font-medium text-muted-foreground">Program</Label>
+          <Label className="text-sm font-medium text-muted-foreground">Programme Level</Label>
           <Select
-            value={filters.programId || 'all'}
-            onValueChange={(value) => updateFilter('programId', value === 'all' ? null : value)}
+            value={filters.programmeLevel || 'all'}
+            onValueChange={(value) => updateFilter('programmeLevel', value === 'all' ? null : value as ProgrammeLevel)}
           >
             <SelectTrigger>
-              <SelectValue placeholder="All Programs" />
+              <SelectValue placeholder="All Levels" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Programs</SelectItem>
-              {programs?.map((program) => (
-                <SelectItem key={program.program_id} value={program.program_id}>
-                  {program.program_name}
+              <SelectItem value="all">All Levels</SelectItem>
+              {programmeLevels?.map((level) => (
+                <SelectItem key={level.value} value={level.value}>
+                  {level.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Programme Name */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium text-muted-foreground">Programme</Label>
+          <Select
+            value={filters.programmeName || 'all'}
+            onValueChange={(value) => updateFilter('programmeName', value === 'all' ? null : value)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="All Programmes" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Programmes</SelectItem>
+              {programmeNames?.map((prog) => (
+                <SelectItem key={prog.value} value={prog.value}>
+                  {prog.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -154,8 +229,8 @@ export function FilterPanel({ filters, onFiltersChange }: FilterPanelProps) {
         <div className="space-y-2">
           <Label className="text-sm font-medium text-muted-foreground">Course</Label>
           <Select
-            value={filters.courseId || 'all'}
-            onValueChange={(value) => updateFilter('courseId', value === 'all' ? null : value)}
+            value={filters.courseCode || 'all'}
+            onValueChange={(value) => updateFilter('courseCode', value === 'all' ? null : value)}
           >
             <SelectTrigger>
               <SelectValue placeholder="All Courses" />
@@ -163,8 +238,29 @@ export function FilterPanel({ filters, onFiltersChange }: FilterPanelProps) {
             <SelectContent>
               <SelectItem value="all">All Courses</SelectItem>
               {courses?.map((course) => (
-                <SelectItem key={course.course_id} value={course.course_id}>
-                  {course.course_code}: {course.course_title}
+                <SelectItem key={course.value} value={course.value}>
+                  {course.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Cohort Year */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium text-muted-foreground">Cohort</Label>
+          <Select
+            value={filters.cohortYear ? String(filters.cohortYear) : 'all'}
+            onValueChange={(value) => updateFilter('cohortYear', value === 'all' ? null : Number(value))}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="All Cohorts" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Cohorts</SelectItem>
+              {cohortYears?.map((year) => (
+                <SelectItem key={year.value} value={year.value}>
+                  {year.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -183,10 +279,10 @@ export function FilterPanel({ filters, onFiltersChange }: FilterPanelProps) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="present">Present</SelectItem>
-              <SelectItem value="late">Late</SelectItem>
-              <SelectItem value="excused">Excused</SelectItem>
-              <SelectItem value="absent">Absent</SelectItem>
+              <SelectItem value="Present">Present</SelectItem>
+              <SelectItem value="Late">Late</SelectItem>
+              <SelectItem value="Excused">Excused</SelectItem>
+              <SelectItem value="Absent">Absent</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -203,8 +299,8 @@ export function FilterPanel({ filters, onFiltersChange }: FilterPanelProps) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Modes</SelectItem>
-              <SelectItem value="online">Online</SelectItem>
-              <SelectItem value="in-person">In-Person</SelectItem>
+              <SelectItem value="In-person">In-Person</SelectItem>
+              <SelectItem value="Online">Online</SelectItem>
             </SelectContent>
           </Select>
         </div>

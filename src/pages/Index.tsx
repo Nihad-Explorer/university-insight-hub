@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Calendar, ClipboardList, TrendingUp, Radio, LogOut } from 'lucide-react';
+import { Users, Calendar, ClipboardList, TrendingUp, TrendingDown, AlertTriangle, Radio, LogOut } from 'lucide-react';
 import { KPICard } from '@/components/dashboard/KPICard';
 import { FilterPanel } from '@/components/dashboard/FilterPanel';
 import { ExportPanel } from '@/components/dashboard/ExportPanel';
 import { AIInsightsPanel } from '@/components/dashboard/AIInsightsPanel';
 import { AutoInsightsPanel } from '@/components/dashboard/AutoInsightsPanel';
 import { AttendanceBySchoolChart } from '@/components/dashboard/charts/AttendanceBySchoolChart';
-import { YearlyTrendChart } from '@/components/dashboard/charts/YearlyTrendChart';
+import { WeeklyTrendChart } from '@/components/dashboard/charts/WeeklyTrendChart';
 import { ProgramAttendanceChart } from '@/components/dashboard/charts/ProgramAttendanceChart';
 import { DeliveryModeChart } from '@/components/dashboard/charts/DeliveryModeChart';
 import { ModuleHotspotsChart } from '@/components/dashboard/charts/ModuleHotspotsChart';
@@ -16,10 +16,10 @@ import {
   useKPIData, 
   useAttendanceBySchool, 
   useProgramAttendance, 
-  useDeliveryModeAttendance 
+  useDeliveryModeAttendance,
+  useWeeklyTrends,
+  useModuleHotspots
 } from '@/hooks/useAttendanceData';
-import { useYearlyAttendanceTrends } from '@/hooks/useYearlyTrends';
-import { useModuleHotspots } from '@/hooks/useModuleHotspots';
 import { useAutoInsights } from '@/hooks/useAutoInsights';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -28,19 +28,23 @@ const Index = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   
-  // Default to no date filters to show maximum data range
+  // Default filters aligned to new schema
   const [filters, setFilters] = useState<DashboardFilters>({
     dateRange: { from: undefined, to: undefined },
-    schoolId: null,
-    programId: null,
-    courseId: null,
-    status: null,
+    academicYear: null,
+    term: null,
+    school: null,
+    programmeLevel: null,
+    programmeName: null,
+    courseCode: null,
+    cohortYear: null,
     deliveryMode: null,
+    status: null,
   });
 
   const { data: kpiData, isLoading: kpiLoading } = useKPIData(filters);
   const { data: schoolData, isLoading: schoolLoading } = useAttendanceBySchool(filters);
-  const { data: yearlyTrendData, isLoading: yearlyTrendLoading } = useYearlyAttendanceTrends(filters);
+  const { data: weeklyTrendData, isLoading: weeklyTrendLoading } = useWeeklyTrends(filters);
   const { data: programData, isLoading: programLoading } = useProgramAttendance(filters);
   const { data: deliveryData, isLoading: deliveryLoading } = useDeliveryModeAttendance(filters);
   const { data: moduleHotspots, isLoading: hotspotsLoading } = useModuleHotspots(filters);
@@ -100,8 +104,8 @@ const Index = () => {
         {/* Filters */}
         <FilterPanel filters={filters} onFiltersChange={setFilters} />
 
-        {/* KPI Cards */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* KPI Cards - Updated for new schema */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
           <KPICard
             title="Total Students"
             value={kpiData?.totalStudents || 0}
@@ -111,17 +115,9 @@ const Index = () => {
             isLoading={kpiLoading}
           />
           <KPICard
-            title="Class Sessions"
-            value={kpiData?.totalSessions || 0}
-            subtitle="Delivered sessions"
-            icon={Calendar}
-            variant="accent"
-            isLoading={kpiLoading}
-          />
-          <KPICard
-            title="Attendance Records"
-            value={kpiData?.totalAttendance || 0}
-            subtitle="Total recorded entries"
+            title="Total Records"
+            value={kpiData?.totalRecords || 0}
+            subtitle="Attendance entries"
             icon={ClipboardList}
             variant="default"
             isLoading={kpiLoading}
@@ -129,9 +125,33 @@ const Index = () => {
           <KPICard
             title="Attendance Rate"
             value={`${attendanceRate}%`}
-            subtitle="Present / (Present + Absent)"
+            subtitle="(Present + Late) / Total"
             icon={TrendingUp}
             variant="success"
+            isLoading={kpiLoading}
+          />
+          <KPICard
+            title="Absence Rate"
+            value={`${kpiData?.absenceRate || 0}%`}
+            subtitle="Absent / Total"
+            icon={TrendingDown}
+            variant="accent"
+            isLoading={kpiLoading}
+          />
+          <KPICard
+            title="Lateness Rate"
+            value={`${kpiData?.latenessRate || 0}%`}
+            subtitle="Late / Total"
+            icon={Calendar}
+            variant="default"
+            isLoading={kpiLoading}
+          />
+          <KPICard
+            title="At-Risk Students"
+            value={kpiData?.atRiskStudents || 0}
+            subtitle="<80% rate or 3+ absences"
+            icon={AlertTriangle}
+            variant="accent"
             isLoading={kpiLoading}
           />
         </div>
@@ -159,7 +179,7 @@ const Index = () => {
           
           <div className="grid gap-6 lg:grid-cols-2">
             <AttendanceBySchoolChart data={schoolData || []} isLoading={schoolLoading} />
-            <YearlyTrendChart data={yearlyTrendData || []} isLoading={yearlyTrendLoading} />
+            <WeeklyTrendChart data={weeklyTrendData || []} isLoading={weeklyTrendLoading} />
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">

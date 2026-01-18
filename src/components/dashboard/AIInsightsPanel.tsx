@@ -17,23 +17,23 @@ interface AIInsightsPanelProps {
 
 const exampleQuestions = [
   {
-    text: "Which school has the highest absentee rate this month?",
+    text: "Which school dropped most in the last 2 weeks and which courses explain it?",
     icon: BarChart3,
   },
   {
-    text: "Are online sessions better attended than in-person ones?",
+    text: "Top 10 courses by absence rate this term (min 200 records)",
     icon: TrendingDown,
   },
   {
-    text: "Which programs show declining attendance trends?",
+    text: "Do online sessions improve attendance for Masters compared to in-person?",
     icon: AlertTriangle,
   },
   {
-    text: "What time of day has the most late arrivals?",
+    text: "Which cohorts are below 80% attendance this term?",
     icon: Clock,
   },
   {
-    text: "Which courses have the most consistent attendance?",
+    text: "What changed this week in Computer Science and why?",
     icon: Lightbulb,
   },
 ];
@@ -71,11 +71,15 @@ export function AIInsightsPanel({ filters, schoolData, programData }: AIInsights
           filters: {
             dateFrom: filters.dateRange.from?.toISOString().split('T')[0],
             dateTo: filters.dateRange.to?.toISOString().split('T')[0],
-            schoolId: filters.schoolId,
-            programId: filters.programId,
-            courseId: filters.courseId,
-            status: filters.status,
+            academicYear: filters.academicYear,
+            term: filters.term,
+            school: filters.school,
+            programmeLevel: filters.programmeLevel,
+            programmeName: filters.programmeName,
+            courseCode: filters.courseCode,
+            cohortYear: filters.cohortYear,
             deliveryMode: filters.deliveryMode,
+            status: filters.status,
           }
         }),
       });
@@ -149,22 +153,29 @@ export function AIInsightsPanel({ filters, schoolData, programData }: AIInsights
   const shouldShowSchoolChart = lastQuestion.includes('school') || 
     lastQuestion.includes('absentee') || 
     lastQuestion.includes('highest') ||
-    lastQuestion.includes('lowest');
+    lastQuestion.includes('lowest') ||
+    lastQuestion.includes('dropped');
     
   const shouldShowProgramChart = lastQuestion.includes('program') || 
     lastQuestion.includes('intervention') ||
     lastQuestion.includes('declining') ||
     lastQuestion.includes('trend') ||
     lastQuestion.includes('worst') ||
-    lastQuestion.includes('best');
+    lastQuestion.includes('best') ||
+    lastQuestion.includes('masters') ||
+    lastQuestion.includes('bachelors');
 
   // Format active filters for display
   const activeFiltersText = [
     filters.dateRange.from && `From: ${filters.dateRange.from.toLocaleDateString()}`,
     filters.dateRange.to && `To: ${filters.dateRange.to.toLocaleDateString()}`,
-    filters.schoolId && 'School filter active',
-    filters.programId && 'Program filter active',
-    filters.courseId && 'Course filter active',
+    filters.academicYear && `Year: ${filters.academicYear}`,
+    filters.term && `Term: ${filters.term}`,
+    filters.school && 'School filter active',
+    filters.programmeLevel && `Level: ${filters.programmeLevel}`,
+    filters.programmeName && 'Programme filter active',
+    filters.courseCode && 'Course filter active',
+    filters.cohortYear && `Cohort: ${filters.cohortYear}`,
     filters.status && `Status: ${filters.status}`,
     filters.deliveryMode && `Mode: ${filters.deliveryMode}`,
   ].filter(Boolean);

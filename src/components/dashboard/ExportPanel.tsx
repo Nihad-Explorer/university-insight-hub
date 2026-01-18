@@ -48,21 +48,25 @@ export function ExportPanel({ filters }: ExportPanelProps) {
         attendance_id: r.attendance_id,
         student_id: r.student_id,
         session_date: r.session_date,
-        start_time: r.start_time,
-        status: r.status,
+        week_start: r.week_start,
+        term: r.term,
+        academic_year: r.academic_year,
+        attendance_status: r.attendance_status,
         minutes_late: r.minutes_late || 0,
         delivery_mode: r.delivery_mode,
         course_code: r.course_code,
         course_title: r.course_title,
-        program_name: r.program_name,
-        school_name: r.school_name,
+        school: r.school,
+        programme_level: r.programme_level,
+        programme_name: r.programme_name,
         instructor: r.instructor,
       })) || [];
 
       exportToCSV(exportData, 'attendance_records', [
-        'Attendance_ID', 'Student_ID', 'Session_Date', 'Start_Time', 'Status', 
-        'Minutes_Late', 'Delivery_Mode', 'Course_Code', 'Course_Title', 
-        'Program_Name', 'School_Name', 'Instructor'
+        'Attendance_ID', 'Student_ID', 'Session_Date', 'Week_Start', 'Term',
+        'Academic_Year', 'Attendance_Status', 'Minutes_Late', 'Delivery_Mode',
+        'Course_Code', 'Course_Title', 'School', 'Programme_Level', 
+        'Programme_Name', 'Instructor'
       ]);
     } finally {
       setIsExporting(false);
@@ -78,39 +82,34 @@ export function ExportPanel({ filters }: ExportPanelProps) {
           value: kpiData?.totalStudents || 0,
         },
         {
-          metric: 'Total Sessions',
-          value: kpiData?.totalSessions || 0,
+          metric: 'Total Records',
+          value: kpiData?.totalRecords || 0,
         },
         {
-          metric: 'Total Attendance Records',
-          value: kpiData?.totalAttendance || 0,
-        },
-        {
-          metric: 'Overall Attendance Rate',
+          metric: 'Attendance Rate',
           value: `${kpiData?.attendanceRate || 0}%`,
+        },
+        {
+          metric: 'Absence Rate',
+          value: `${kpiData?.absenceRate || 0}%`,
+        },
+        {
+          metric: 'Lateness Rate',
+          value: `${kpiData?.latenessRate || 0}%`,
+        },
+        {
+          metric: 'At-Risk Students',
+          value: kpiData?.atRiskStudents || 0,
         },
       ];
 
       const schoolSummary = schoolData?.map(s => ({
-        metric: `${s.school_name} - Present`,
-        value: s.present,
-      })).concat(
-        schoolData?.map(s => ({
-          metric: `${s.school_name} - Late`,
-          value: s.late,
-        })) || [],
-        schoolData?.map(s => ({
-          metric: `${s.school_name} - Excused`,
-          value: s.excused,
-        })) || [],
-        schoolData?.map(s => ({
-          metric: `${s.school_name} - Absent`,
-          value: s.absent,
-        })) || []
-      ) || [];
+        metric: `${s.school_name} - Absence Rate`,
+        value: `${s.absence_rate}%`,
+      })) || [];
 
       const programSummary = programData?.map(p => ({
-        metric: `${p.program_name} - Rate`,
+        metric: `${p.program_name} - Attendance Rate`,
         value: `${p.rate}%`,
       })) || [];
 
